@@ -58,9 +58,9 @@ flowchart TD
 
 ### AD-2 — User Directory & Auth Owns Identity and Permissions
 
-- **Binds:** Epic 1 (FR-1..FR-6, FR-20, FR-21, FR-22, FR-25, FR-26, FR-27), Epic 2 (FR-11), Epic 3 (FR-19, FR-20, FR-24), NFR-S2, NFR-S3
+- **Binds:** Epic 1 (FR-1..FR-6, FR-20, FR-21, FR-22, FR-25, FR-26, FR-27), Epic 2 (FR-11), Epic 3 (FR-19, FR-20, FR-24, FR-28), NFR-S2, NFR-S3
 - **Prevents:** auth/permission logic being duplicated or owned by Tool Maintenance or Admin; divergent permission checks across modules; admin isolation leaking
-- **Rule:** The User Directory & Auth module is the single owner of users, groups, permissions, sessions, MFA/TOTP, credentials and password-recovery tokens, account state (pending_approval/active/deactivated), and qualifications. It exposes a single port — `Service` — from which consumers resolve the current caller's identity, the caller's **granted Qualifications** (for AD-7), and the caller's *resolved permission set* (the additive union of all permission-group and direct grants, AD-12). Tool Maintenance and Admin consume only this port; they never store auth data, never author their own SQL over user/qualification tables, and never implement their own permission checks. FR-19 (admin route isolation, HTTP 403, existence hidden) is enforced server-side in the composition-root gateway against this port. **Permission and qualification revocation takes effect immediately on the very next check** — the auth port resolves against the live user state per request, never against a session-cached permission snapshot (FR-21/FR-22). New approved users are seeded with the `helfende` base role (AD-12, FR-5/FR-20). Password self-service, forgot-password recovery, and dual-control admin recovery all live in this module (FR-25/26/27, AD-13).
+- **Rule:** The User Directory & Auth module is the single owner of users, groups, permissions, sessions, MFA/TOTP, credentials, password-recovery tokens and email/SMTP settings, account state (pending_approval/active/deactivated), and qualifications. It exposes a single port — `Service` — from which consumers resolve the current caller's identity, the caller's **granted Qualifications** (for AD-7), and the caller's *resolved permission set* (the additive union of all permission-group and direct grants, AD-12). Tool Maintenance and Admin consume only this port; they never store auth data, never author their own SQL over user/qualification tables, and never implement their own permission checks. FR-19 (admin route isolation, HTTP 403, existence hidden) is enforced server-side in the composition-root gateway against this port. **Permission and qualification revocation takes effect immediately on the very next check** — the auth port resolves against the live user state per request, never against a session-cached permission snapshot (FR-21/FR-22). New approved users are seeded with the `helfende` base role (AD-12, FR-5/FR-20). Password self-service, forgot-password recovery, and dual-control admin recovery all live in this module (FR-25/26/27, AD-13).
 
 ### AD-3 — First-Class Columns + JSONB Extension Surface
 
@@ -134,9 +134,15 @@ flowchart TD
 - **Prevents:** passwords unrecoverable for day-to-day users; single-admin accounts that a single compromise could take over; admin lockout with no safe recovery path; reset tokens that are replayable or long-lived
 - **Rule:** The User module owns all credential and recovery flows (FR-25/26/27, AD-2) and exposes them purely through its `Service` port:
   - **Change own password (FR-25).** Any authenticated user changes their own password by confirming the current password and satisfying the FR-2 policy (≥ 10 chars). Password hashes use Argon2id; plaintext is never stored or logged. A successful change revokes the user's other server-side sessions and is audited (NFR-O1). No elevated permission is required — access is intrinsic to one's own account (no `*` permission needed; gated only by authentication, consistent with AD-12's "one permission per action", where ownership of self is the capability).
-  - **Forgot-password reset (FR-26).** The login flow accepts an email; if it matches an `active` account, the module emits a **single transactional email** (SMTP, env/secrets-configured, NFR-S4) carrying a single-use, 30-minute, hashed-at-rest reset token (newer request invalidates older ones). Response is uniform for known/unknown email (no enumeration, NFR-S1-friendly). Reset enforces FR-2 and revokes sessions; audited. This email is the **only** email in V1 and does not reopen the automated-notification non-goal (PRD §5).
+  - **Forgot-password reset (FR-26).** The login flow accepts an email; if it matches an `active` account, the module emits a **single transactional email** over SMTP (parameters read from admin-configured email-settings, AD-14) carrying a single-use, 30-minute, hashed-at-rest reset token (newer request invalidates older ones). Response is uniform for known/unknown email (no enumeration, NFR-S1-friendly). Reset enforces FR-2 and revokes sessions; audited. This email is the **only** email in V1 and does not reopen the automated-notification non-goal (PRD §5).
   - **Dual-admin recovery (FR-27).** Exactly **two `admin` accounts are seeded** at deployment; credentials are generated and distributed out-of-band (NFR-S4), never in VCS. An admin in a locked-out/forgotten state **cannot** self-reset via the FR-26 flow alone; recovery requires the **other admin's** authorization, is gated by an admin-only permission (see base series `admin.recovery.approve`), and is recorded as a high-severity immutable audit event (NFR-O2). Recovery of the **last remaining** admin is deliberately **not** reachable by any self-service path; it is a documented, out-of-band manual bootstrap requiring both admins (or a designated recovery sponsor). Recovery always enforces FR-2.
 - **Seeding note (extends AD-12/FR-5):** the two base admins are seeded with the `admin` role and the `admin.recovery.approve` permission; all four base roles plus the two admin accounts are part of the cold-start migration seed (NFR-R2).
+
+### AD-14 — Admin-Configurable Email/SMTP Settings (Single Writer)
+
+- **Binds:** Epic 3 (FR-28), Epic 1 (FR-26), NFR-S4, NFR-O2, NFR-R2, AD-2, AD-10, AD-13
+- **Prevents:** SMTP parameters locked into env/deploy config requiring a redeploy to change; two modules writing conflicting delivery settings; the SMTP password stored or displayed in plaintext
+- **Rule:** SMTP email-delivery settings are a **single configuration surface**, editable only from the Admin panel (FR-28) by users holding the admin-only `admin.settings.email` permission (AD-6/AD-12). The settings row(s) are **owned by the User module** (the email consumer for FR-26, AD-2/AD-13); the Admin module exposes the edit/test UI exclusively through the User module's **config port** — matching the AD-10 pattern — so Admin authors no new table. Persistence is migration-backed (NFR-R2). The SMTP **password is stored encrypted at rest** (app-level key from env/secret-manager, NFR-S4) and is **write-only/masked** in the UI (never returned in plaintext). The surface includes host, port, connection security (none/STARTTLS/TLS), sender address & display name, username, password, and a **"send test email"** action that exercises the live configuration and returns success/failure. All writes and send attempts are audited (NFR-O1/NFR-O2). Runtime delivery failures during FR-26 are logged, never thrown away silently.
 
 ## Consistency Conventions
 
@@ -258,8 +264,9 @@ The one golang-migrate schema (NFR-R2, AD-11) holds every table the app persists
 | 17 | `inspection_items` | Per-checkline results for checklist inspections | Tool | Checklist details, if the tool type is checklist mode (FR-12). |
 | 18 | `reinstatements` | Out-of-Service clearing events (actor, reason, date) | Tool | Who cleared a tool Out-of-Service and why (AD-9). Sole exit from OOS (AD-4). |
 | 19 | `password_reset_tokens` | Single-use, expiring credential-recovery tokens (hashed value, user, expiry, agent/approver) | User | Powers FR-26 forgot-password reset and FR-27 dual-admin recovery. One active token per user; new request invalidates older ones (AD-13). |
+| 20 | `smtp_settings` | Admin-configurable SMTP email-delivery parameters (host, port, security, sender, username, encrypted password) | User | Configures the FR-26 recovery email at runtime from the Admin UI (FR-28, AD-14). Password encrypted at rest; write-only/masked in UI. Single writer = Admin via User config port. |
 
-> **Attribution:** tables 1–11 and **19** belong to the **User** hexagon, 12–18 to the **Tool** hexagon. The Admin module owns no tables — it configures through the Tool module's config port and the User module's lifecycle/credential-recovery port (AD-8, AD-10, AD-13).
+> **Attribution:** tables 1–11, **19 and 20** belong to the **User** hexagon, 12–18 to the **Tool** hexagon. The Admin module owns no tables — it configures through the Tool module's config port and the User module's lifecycle/credential-recovery/settings ports (AD-8, AD-10, AD-13, AD-14).
 
 ### Base permission series (visible from day one)
 
@@ -285,6 +292,7 @@ Every **action** in the app maps to exactly one permission code (AD-12). This is
 | `dsgvo.access_report` | Generate a user's data access report (FR-24) | User |
 | `dsgvo.delete` | Execute account deletion / right-to-be-forgotten (FR-24) | User |
 | `admin.recovery.approve` | Authorize credential recovery for a locked-out/forgotten admin (FR-27) | User |
+| `admin.settings.email` | Configure SMTP/email-delivery settings in the Admin panel (FR-28) | User |
 
 ### Base role matrix
 
@@ -310,6 +318,7 @@ The **additive** permission set each of the four base roles ships with. A tick m
 | `dsgvo.access_report` | | | | ✔ |
 | `dsgvo.delete` | | | | ✔ |
 | `admin.recovery.approve` | | | | ✔ |
+| `admin.settings.email` | | | | ✔ |
 
 > **Reading the matrix:** `helfende` = "volunteer who inspects". `schirrmeister` = **equipment caretaker** — everything a volunteer can do, **plus** managing tools and tool types (and their inspection history). `fuehrende` = **leadership** — inspection plus history, PDF export, and reinstate (but not tool/tool-type administration, which belongs to the Schirrmeister). `admin` = **everything**. All four are editable by an admin, and new custom groups can be added (AD-12). Inspection still always needs the tool type's required qualification (AD-7), independent of these roles.
 
@@ -347,6 +356,7 @@ erDiagram
     class PERMISSIONS u
     class QUALIFICATIONS u
     class PASSWORD_RESET_TOKENS u
+    class SMTP_SETTINGS u
     class USER_GROUP_MEMBERS ujunc
     class USER_PERMISSION_GROUPS ujunc
     class PERMISSION_GROUP_PERMISSIONS ujunc
@@ -492,10 +502,11 @@ stateDiagram-v2
 | --- | --- | --- |
 | Epic 1 — User Directory & Auth (FR-1..FR-7, FR-25..FR-27) | `internal/user` hexagon (core + auth port) | AD-2, AD-3, AD-13 |
 | Epic 2 — Tool Maintenance (FR-8..FR-18) | `internal/tools` hexagon | AD-4, AD-5, AD-7, AD-9, AD-10 |
-| Epic 3 — Admin & Config (FR-19..FR-24) | `internal/admin` hexagon | AD-2, AD-6, AD-8, AD-10 |
+| Epic 3 — Admin & Config (FR-19..FR-24, FR-28) | `internal/admin` hexagon | AD-2, AD-6, AD-8, AD-10, AD-14 |
 | Cross-module auth/permissions | `internal/user` auth port consumed by all | AD-2, AD-6, AD-11, AD-12 |
 | Permission model (roles, additive access, action match) | `internal/user` core (vocabulary + resolution) | AD-12, AD-2, AD-6 |
 | Password self-service & admin credential recovery (FR-25/26/27) | `internal/user` core (credentials + reset tokens) | AD-13, AD-2 |
+| SMTP/email-settings configuration (FR-28) | `internal/user` settings port; Admin edit UI | AD-14, AD-2, AD-10 |
 | Tool status & dashboard | `internal/tools` (derived) | AD-4, AD-5 |
 | Tool/Tool-Type config write path | Admin triggers → Tool module config port | AD-10 |
 | DSGVO ops (FR-24) / user lifecycle | Admin trigger → composition-root orchestration → owning-module ports | AD-8, AD-11 |
@@ -508,5 +519,5 @@ stateDiagram-v2
 - **Migration-tool rollback mechanics** — golang-migrate forward migrations are the contract (NFR-R2); detailed rollback procedure is documented per migration at build time.
 - **Backup destination specifics** — automated pg backup to ≥1 configurable destination (env-driven) and a documented restore procedure are required (NFR-R3); the concrete destination (filesystem/object store) is deferred to the deploy epic/site.
 - **CI/CD pipeline configuration** — required gates (lint NFR-M3, tests NFR-M2, dependency audit) are set; the provider and workflow files are deferred to the deploy epic.
-- **TOTP/MFA library choice and email-send provider** — required by FR-4/FR-5 and FR-26 (forgot-password email); concrete libraries deferred to the User Directory epic. Capability shape fixed here: transactional SMTP sender for the single FR-26 email (AD-13, addendum "Password Management Decisions"), never automated notification emails (PRD §5).
+- **TOTP/MFA library choice and email-send provider** — required by FR-4/FR-5 and FR-26 (forgot-password email); concrete libraries deferred to the User Directory epic. Capability shape fixed here: transactional SMTP sender for the single FR-26 email, with **delivery parameters admin-configurable at runtime** (FR-28, AD-14, addendum "Password Management Decisions"), never automated notification emails (PRD §5).
 - **Interactive diagram viewer** — the spine's mermaid diagrams should be click-to-enlarge with pan/zoom inside the enlarged view. This is deferred until the Docusaurus docs site exists (NFR-M4): implement there as a custom `@docusaurus/theme-mermaid` component (enlarge overlay + pan). No change needed now; the diagrams are authored as plain mermaid and stay renderer-agnostic.
