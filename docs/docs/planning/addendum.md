@@ -1,6 +1,3 @@
----
-sidebar_position: 4
----
 # Addendum: THW OV Singen App
 
 *This document preserves technical decisions, options considered, and implementation context that informs downstream work (architecture, solution design) but does not belong in the PRD itself.*
@@ -37,11 +34,14 @@ Added to support FR-25, FR-26, and FR-27 (self-service password management and d
 
 ## Operational Settings Decisions
 
-System-wide operational settings for V1 are **owned by the Admin module** (the module responsible for configuration). Each is a small Admin-owned table, edited once from the Admin panel, and consumed at runtime by the relevant worker/port. This covers SMTP (FR-28) and backup destinations (FR-29).
+System-wide operational settings for V1 are **owned by the Admin module** (the module responsible for configuration). Each is a small Admin-owned table, edited once from the Admin panel, and consumed at runtime by the relevant worker/port. This covers SMTP (FR-28), backup destinations (FR-29), and the named schedule catalog (FR-30).
 
 | Concern | Decision | Notes |
 |---|---|---|
 | SMTP ownership | Admin module owns `smtp_settings` (FR-28, AD-14) | Single system-wide delivery config, not user business logic. User module consumes it via Admin's settings port for the FR-26 email. |
 | Backup destination ownership | Admin module owns `backup_destinations` (FR-29, AD-15) | Replaces the earlier "env-driven/deferred" stance: destinations (S3-compatible, FTP/SFTP, local filesystem) are admin-configurable, editing them needs no redeploy. |
+| Schedule ownership | Admin module owns `schedules` (FR-30, AD-16) | Cross-cutting named catalog (e.g. "1 year", "1 quarter", "1 month", "2 weeks", "3 days"). Tool Types pick a default schedule and individual Tools may pick their own (FK → `schedules`); admins create/edit via `schedules.manage`. Reusable by future modules (vehicle logs, event scheduling), not tool-specific logic. |
+| Schedule shape | Name + repeating interval (unit/magnitude) in V1; reserved weekday-set + time-of-day fields (cron-like) unused in V1 | Signposts future composite timing (e.g. "every Monday & Thursday at 08:00") with **no schema migration needed** — the fields exist now but are nullable/ignored (AD-16). Lenient validation: name + interval required. |
 | Secrets in settings | Encrypted at rest (app-level key) + write-only/masked in UI | Applies to the SMTP password and backup credentials (NFR-S4); never returned or logged in plaintext. |
 | Connectivity test | In-panel "send test email" / "test connection" actions | Verify SMTP delivery and backup reachability/write from the Admin panel. |
+| Seed schedules | Ship the catalog pre-seeded ("1 year", "1 quarter", "1 month", "2 weeks", "3 days") | Lets Epic 2 assign schedules immediately; admins can add more/rename (FR-30). |

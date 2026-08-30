@@ -1,0 +1,165 @@
+.svgContainer {
+  max-width: 100%;
+}
+
+.svgContainer > svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.inline {
+  cursor: zoom-in;
+  line-height: 0;
+}
+
+.inline > div {
+  pointer-events: none;
+}
+
+.expandButton {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: rgb(0 51 153 / 0.85);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.wrapper:hover .expandButton {
+  opacity: 1;
+}
+
+.expandButton:hover {
+  background: #00124d;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  background: rgb(0 0 0 / 0.86);
+  padding: 12px;
+}
+
+.viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 6px;
+}
+
+.viewport:active {
+  cursor: grabbing;
+}
+
+.stage {
+  transform-origin: 0 0;
+  will-change: transform;
+  background: #fff;
+  color: #1b1b1d;
+  padding: 24px;
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.4);
+  max-width: max-content;
+}
+
+.stage :global(svg) {
+  display: block;
+}
+
+.stage :global(button) {
+  color: inherit;
+}
+
+.closeButton {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  color: #00124d;
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  background: #f5821f;
+  color: #fff;
+}
+
+.toolbar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.12);
+  backdrop-filter: blur(4px);
+}
+
+.toolButton {
+  min-width: 40px;
+  height: 34px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: #003399;
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.toolButton:hover {
+  background: #00124d;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .backdrop {
+    animation: fadeIn 0.15s ease;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

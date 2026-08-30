@@ -140,7 +140,7 @@ stateDiagram-v2
     class OutOfService off;
 ```
 
-The **next inspection date is computed by one shared rule**: the last successful inspection plus the type's schedule (a tool can have its own custom interval). When a tool is reinstated, the clock restarts from the reinstatement date — so no tool can "drift" into ambiguity.
+The **next inspection date is computed by one shared rule**: the last successful inspection plus the **schedule**. Schedules are named and reusable — "1 year", "1 quarter", "1 month", "2 weeks", "3 days" and more — each tool type picks a default schedule, and a single tool can pick its own instead. Admins manage the schedule catalog in the admin panel. When a tool is reinstated, the clock restarts from the reinstatement date — so no tool can "drift" into ambiguity.
 
 ## What goes into an inspection?
 
@@ -152,7 +152,7 @@ An inspection is either a simple **pass/fail** check or a **checklist** of indiv
 - **Full history.** Every inspection is recorded, so questions and audits are answered in seconds.
 - **Qualifications are real.** They must be present in the system before an inspection is allowed.
 - **Access is controlled.** What you can see or do depends on your role; the admin module is isolated and protected.
-- **Passwords are yours to manage.** Every user can change their own password, and a forgotten password is recoverable with a secure email link (account recovery only — no automated notification emails). The email server that delivers these recovery links, and the backup destinations where the data is stored, are configured in the admin panel, so both can be changed at any time without a redeploy.
+- **Passwords are yours to manage.** Every user can change their own password, and a forgotten password is recoverable with a secure email link (account recovery only — no automated notification emails). The email server that delivers these recovery links, the backup destinations where the data is stored, and the **schedule catalog** that drives inspection intervals are all configured in the admin panel, so each can be changed at any time without a redeploy.
 - **Admins are protected by dual control.** The system starts with two admin accounts; neither can reset the other's credentials alone, so no single compromised account can take over the system.
 - **DSGVO-compliant by design.** Personal data of volunteers is protected, with dedicated operations for access reports and deletion.
 
@@ -161,7 +161,7 @@ An inspection is either a simple **pass/fail** check or a **checklist** of indiv
 | In scope (V1) | Not in scope (V1) |
 |---|---|
 | User directory, login, permissions, approval | Tool reservations / booking |
-| Self-service password mgmt: change own password, forgot-password reset, dual-control admin recovery, admin-configurable email delivery & backup destinations | Repair tracking and logs |
+| Self-service password mgmt: change own password, forgot-password reset, dual-control admin recovery, admin-configurable email delivery, backup destinations & schedule catalog | Repair tracking and logs |
 | Tool & tool-type catalog | Repair tracking and logs |
 | Qualification-gated inspections (pass/fail + checklist) | Automated notifications |
 | Status dashboard with traffic-light | Integration with external THW systems |

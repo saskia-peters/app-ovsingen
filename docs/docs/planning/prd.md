@@ -1,9 +1,8 @@
 ---
-title: PRD — THW OV Singen App
+title: THW OV Singen App
 status: draft
 created: 2026-08-29
 updated: 2026-08-29
-sidebar_position: 1
 ---
 
 # PRD: THW OV Singen App
@@ -142,15 +141,15 @@ This is the first functional module of the THW OV Singen App Ecosystem. It handl
 **Functional Requirements:**
 
 #### FR-8: Tool Type Management
-Admins can create and edit Tool Types, each defining a name, default Inspection Schedule (in months), the required Qualification to inspect it, and the inspection mode (pass/fail or checklist).
+Admins can create and edit Tool Types, each defining a name, a default Inspection Schedule (chosen from the named schedule catalog, FR-30), the required Qualification to inspect it, and the inspection mode (pass/fail or checklist).
 - **Consequences (testable):**
   - A Tool Type can be saved with all four attributes populated.
   - The inspection mode selection (pass/fail vs. checklist) persists and controls the inspection UI for all Tools of that type.
 
 #### FR-9: Tool Management
-Admins can create and edit individual Tools belonging to a Tool Type, optionally overriding the Tool Type's default Inspection Schedule with a custom interval. Tools can be created manually or imported in bulk via CSV upload.
+Admins can create and edit individual Tools belonging to a Tool Type, optionally choosing a specific Inspection Schedule (FR-30) that overrides the Tool Type's default. Tools can be created manually or imported in bulk via CSV upload.
 - **Consequences (testable):**
-  - A Tool with a custom schedule interval uses that interval (not the Tool Type default) when calculating inspection due dates.
+  - A Tool with an individually chosen schedule uses that schedule (not the Tool Type default) when calculating inspection due dates.
   - A CSV import with valid columns creates the corresponding Tool records.
   - A CSV import with malformed rows returns a clear per-row error report without partial silent failures.
 
@@ -218,7 +217,7 @@ Full inspection history per Tool is stored and accessible to **Fuehrung** and **
 
 #### 4.3 Admin & Configuration Module
 **Description:**
-The admin module is a separate, isolated interface within the ecosystem, accessible exclusively to users holding the Admin permission. It exposes all configuration surfaces: user approvals, group and qualification management, Tool Type and Tool configuration, **operational settings (SMTP/email delivery FR-28 and backup destinations FR-29)**, and DSGVO compliance operations. Realizes UJ-3.
+The admin module is a separate, isolated interface within the ecosystem, accessible exclusively to users holding the Admin permission. It exposes all configuration surfaces: user approvals, group and qualification management, Tool Type and Tool configuration, **operational settings (SMTP/email delivery FR-28, backup destinations FR-29, and the named schedule catalog FR-30)**, and DSGVO compliance operations. Realizes UJ-3.
 
 **Functional Requirements:**
 
@@ -307,6 +306,14 @@ Administrators can configure the automated-backup delivery targets directly in t
   - Saved destinations are used by the backup job without a redeploy; a failed backup is logged (NFR-O1) and surfaced, never silently dropped.
   - Access is limited to the Admin permission (FR-19) and an admin-only action permission (`admin.settings.backup`).
 
+#### FR-30: Schedule Catalog Management (Admin Interface)
+Administrators manage a **named schedule catalog** directly in the admin interface. Schedules are reusable, named timing definitions (e.g. "1 year", "1 quarter", "1 month", "2 weeks", "3 days") that Tool Types use as their default Inspection Schedule and individual Tools can choose from (FR-8/FR-9). The catalog is cross-cutting — Admin-owned so future modules (e.g. vehicle logs, event scheduling) can reuse the same schedules.
+- **Consequences (testable):**
+  - The admin panel exposes a schedule-catalog surface to create, edit, and archive schedules. Each schedule has a **name** and a repeating **interval** (a unit + magnitude, e.g. "2 weeks").
+  - Schedule rows can be assigned as the default for Tool Types and chosen per Tool; choosing/assigning an existing schedule requires no new schedule creation.
+  - Schedules are **prepared for future enhancement**: each row also carries reserved **weekday** (one or several days of week) and **time-of-day** fields, similar in spirit to cron — present in the schema but **nullable and unused in V1** (no need to fill them to save a schedule). A later enhancement can activate them without a schema migration.
+  - Access is limited to the Admin permission (FR-19) and an admin-only action permission (`schedules.manage`); archiving a schedule does not delete tool/tool-type history.
+
 ## 4.4 Cross-Cutting Non-Functional Requirements
 
 ### Security
@@ -355,8 +362,10 @@ Administrators can configure the automated-backup delivery targets directly in t
 
 ### 6.1 In Scope
 * **Epic 1 – User Directory & Authentication:** Email login, password policy (min 10 chars), progressive lockout, optional TOTP MFA, self-registration with Admin approval, group/permission management, flexible user attributes, **self-service password management (change own password, forgot-password recovery email), dual-admin bootstrap and dual-control credential recovery** (FR-1 through FR-7, **FR-25 through FR-27**).
-* **Epic 2 – Tool Maintenance Module:** Tool Type and Tool management, CSV import, flexible attributes, qualification-gated inspections for Helfer\*in and Fuehrung, checklist and pass/fail inspection modes, Out of Service flagging, Out of Service reinstatement by Fuehrung/Admin (clock reset), color-coded Status Dashboard, PDF report export, inspection history (FR-8 through FR-18).
-* **Epic 3 – Admin & Configuration Module:** Isolated admin panel, user approval workflow, user/group administration, qualification management, tool/tool type configuration, **SMTP/email-settings and backup-destination configuration**, DSGVO compliance operations including anonymized deletion (FR-19 through FR-24, **FR-28, FR-29**).
+* **Epic 2 – Tool Maintenance Module:** Tool Type and Tool management (tool types choose a default schedule and tools may pick their own from the Admin schedule catalog, FR-30), CSV import, flexible attributes, qualification-gated inspections for Helfer\*in and Fuehrung, checklist and pass/fail inspection modes, Out of Service flagging, Out of Service reinstatement by Fuehrung/Admin (clock reset), color-coded Status Dashboard, PDF report export, inspection history (FR-8 through FR-18).
+* **Epic 3 – Admin & Configuration Module:** Isolated admin panel, user approval workflow, user/group administration, qualification management, tool/tool type configuration, **SMTP/email-settings and backup-destination configuration, and the named schedule catalog** on which Epic 2's tool-type defaults and per-tool schedule choices depend (FR-19 through FR-24, **FR-28, FR-29, FR-30**).
+
+> **Ordering note:** Epic 2's Tool Type(s) reference the schedule catalog (FR-8/FR-9). The schedule catalog (FR-30, Admin-owned) is a prerequisite slice of Epic 3 that must land before Epic 2's schedule assignment is usable; it ships with a few seeded schedules (e.g. "1 year", "1 quarter", "1 month").
 * **Infrastructure:** Docker containerization, persistent database with versioned migrations, configurable automated backups and restore.
 
 ### 6.2 Out of Scope for MVP

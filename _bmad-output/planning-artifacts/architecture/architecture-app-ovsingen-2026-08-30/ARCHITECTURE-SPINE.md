@@ -76,9 +76,9 @@ flowchart TD
 
 ### AD-5 — One Shared Inspection Clock (Due Date Per Tool)
 
-- **Binds:** Epic 2 (FR-8, FR-9, FR-15, FR-16, FR-17, FR-18)
+- **Binds:** Epic 2 (FR-8, FR-9, FR-15, FR-16, FR-17, FR-18), AD-16
 - **Prevents:** Dashboard and inspection module computing different next-due dates for the same tool; inconsistent treatment of schedule overrides
-- **Rule:** `next_due` is computed per tool as `last_successful_inspection_date + schedule_interval`, where `schedule_interval` is the Tool's custom interval if set, else the Tool Type default (FR-9). On Out-of-Service reinstatement the clock resets: `next_due = reinstatement_date + schedule_interval` (FR-15). Color thresholds (FR-16): Red = past due (or Out-of-Service); Orange = due within the next 14 calendar days; Green = due more than 14 days out. This exact rule is a single shared function all consumers call.
+- **Rule:** `next_due` is computed per tool as `last_successful_inspection_date + <resolved schedule interval>`, where the **resolved schedule** is the Tool's individually chosen `schedules` row if set, else the Tool Type's default `schedules` row (FR-9, AD-16). The interval comes from the schedule's `interval_unit`/`interval_magnitude` (the weekday/time parts are unused in V1, AD-16). On Out-of-Service reinstatement the clock resets: `next_due = reinstatement_date + <resolved schedule interval>` (FR-15). Color thresholds (FR-16): Red = past due (or Out-of-Service); Orange = due within the next 14 calendar days; Green = due more than 14 days out. This exact rule is a single shared function all consumers call; a future weekday/time composite advances `next_due` to the schedule's next occurrence behind this same function (AD-16).
 
 ### AD-6 — Server-Side Authorization Is the Only Source of Truth
 
@@ -102,19 +102,19 @@ flowchart TD
 
 - **Binds:** Epic 2 (FR-14, FR-15), Epic 3, NFR-O1
 - **Prevents:** the Out-of-Service state being mutable by the wrong role; a reinstatement that fails to reset the inspection clock; diverging reinstate rules between Dashboard and tool detail
-- **Rule:** Only **Fuehrung** and **Admin** (via the resolved permission set, AD-2/AD-6) can clear a Tool's Out-of-Service status (FR-15). Reinstatement requires a mandatory non-empty reason/notes field and records an event (actor, timestamp, reason). It is the sole exit from Out-of-Service (AD-4), and it **resets the inspection clock**: `next_due = reinstatement_date + schedule_interval` (AD-5). Helfer*in cannot reinstate. Every read path derives the post-reinstatement color from the reset `next_due` immediately.
+- **Rule:** Only **Fuehrung** and **Admin** (via the resolved permission set, AD-2/AD-6) can clear a Tool's Out-of-Service status (FR-15). Reinstatement requires a mandatory non-empty reason/notes field and records an event (actor, timestamp, reason). It is the sole exit from Out-of-Service (AD-4), and it **resets the inspection clock**: `next_due = reinstatement_date + <resolved schedule interval>` (AD-5). Helfer*in cannot reinstate. Every read path derives the post-reinstatement color from the reset `next_due` immediately.
 
 ### AD-10 — Tool/Tool-Type Configuration Write Path (Single Owner)
 
 - **Binds:** Epic 2 (FR-8, FR-9), Epic 3 (FR-23), AD-5
 - **Prevents:** Admin and Tool Maintenance both authoring the same tool/tool_type rows; a CSV admin import writing an `attributes`/`schedule` key that the shared due-date function never reads (adversarial two-sources-of-truth)
-- **Rule:** Tools, Tool Types, and checklist items remain owned by the **Tool Maintenance** module (their persistence lives with AD-1's Tool hexagon). Admin configures them — including FR-23 checklist definition and FR-9 CSV bulk import — exclusively through the Tool module's exported **configuration port**, never by Admin-owned copies or ad-hoc SQL over the same tables. A Tool's custom schedule is the first-class `schedule_override` column (never a JSONB `attributes` key); schedule data is read only via AD-5's shared function.
+- **Rule:** Tools, Tool Types, and checklist items remain owned by the **Tool Maintenance** module (their persistence lives with AD-1's Tool hexagon). Admin configures them — including FR-23 checklist definition and FR-9 CSV bulk import — exclusively through the Tool module's exported **configuration port**, never by Admin-owned copies or ad-hoc SQL over the same tables. A Tool's custom schedule is a first-class FK to the Admin-owned `schedules` catalog (`tool.schedule_id`, never a JSONB `attributes` key, never an Admin-authored copy); schedule data is resolved only via AD-5/AD-16's shared function.
 
 ### AD-11 — Cross-Module Schema & Reference Ownership
 
 - **Binds:** all — Epic 1, Epic 2, Epic 3, NFR-R2
 - **Prevents:** two modules declaring the same table or name-colliding with a shared identifier; ambiguous cross-module foreign keys; two modules writing the same JSONB key with different shapes
-- **Rule:** One golang-migrate migration set is the single schema authority (NFR-R2). Each table has exactly one owning module (users/auth → User; tools/tool_types/checklist/inspections → Tool; `smtp_settings` & `backup_destinations` → **Admin**; the whole set evolves only via migrations). Cross-module references (e.g. an inspection's `inspector_id` → user, a Tool Type's required Qualification → user-module qualification) are declared as foreign keys to the owning module's identifiers, with the referencing module reading those identifiers only through the owning module's port. JSONB `attributes` keys are unique per semantic meaning across the whole app (no two modules assign a different shape to the same key). The Admin module owns exactly **two** configuration tables (`smtp_settings`, `backup_destinations`, AD-14/AD-15) as its operational-settings surface; it does not duplicate other modules' tables.
+- **Rule:** One golang-migrate migration set is the single schema authority (NFR-R2). Each table has exactly one owning module (users/auth → User; tools/tool_types/checklist/inspections → Tool; `smtp_settings`, `backup_destinations`, `schedules` → **Admin**; the whole set evolves only via migrations). Cross-module references (e.g. an inspection's `inspector_id` → user, a Tool Type's required Qualification → user-module qualification, a Tool/Tool-Type's `schedule_id`/`default_schedule_id` → admin-module schedule) are declared as foreign keys to the owning module's identifiers, with the referencing module reading those identifiers only through the owning module's port. JSONB `attributes` keys are unique per semantic meaning across the whole app (no two modules assign a different shape to the same key). The Admin module owns exactly **three** configuration tables (`smtp_settings`, `backup_destinations`, `schedules`, AD-14/AD-15/AD-16) as its operational-settings surface; it does not duplicate other modules' tables.
 
 ### AD-12 — Action-Matched, Additive Permission Model
 
@@ -142,13 +142,19 @@ flowchart TD
 
 - **Binds:** Epic 3 (FR-28), Epic 1 (FR-26), NFR-S4, NFR-O2, NFR-R2, AD-2, AD-6, AD-11
 - **Prevents:** SMTP parameters locked into env/deploy config requiring a redeploy to change; two modules writing conflicting delivery settings; the SMTP password stored or displayed in plaintext
-- **Rule:** SMTP email-delivery settings are a **system-wide configuration surface, owned by the Admin module** (the module responsible for configuration, AD-1). They are edited only from the Admin panel (FR-28) by users holding the admin-only `admin.settings.email` permission (AD-6/AD-12). The settings row(s) persist in the Admin module's own **`smtp_settings`** table (one of Admin's two operational-settings tables, AD-11) and are **read at runtime by the User module's email adapter** through the Admin module's exported **settings port**, purely as a consumer (the User module authors no copy, AD-2/AD-11). Persistence is migration-backed (NFR-R2). The SMTP **password is stored encrypted at rest** (app-level key from env/secret-manager, NFR-S4) and is **write-only/masked** in the UI (never returned in plaintext). The surface includes host, port, connection security (none/STARTTLS/TLS), sender address & display name, username, password, and a **"send test email"** action that exercises the live configuration and returns success/failure. All writes and send attempts are audited (NFR-O1/NFR-O2). Runtime delivery failures during FR-26 are logged, never thrown away silently.
+- **Rule:** SMTP email-delivery settings are a **system-wide configuration surface, owned by the Admin module** (the module responsible for configuration, AD-1). They are edited only from the Admin panel (FR-28) by users holding the admin-only `admin.settings.email` permission (AD-6/AD-12). The settings row(s) persist in the Admin module's own **`smtp_settings`** table (one of Admin's three operational-settings tables, AD-11) and are **read at runtime by the User module's email adapter** through the Admin module's exported **settings port**, purely as a consumer (the User module authors no copy, AD-2/AD-11). Persistence is migration-backed (NFR-R2). The SMTP **password is stored encrypted at rest** (app-level key from env/secret-manager, NFR-S4) and is **write-only/masked** in the UI (never returned in plaintext). The surface includes host, port, connection security (none/STARTTLS/TLS), sender address & display name, username, password, and a **"send test email"** action that exercises the live configuration and returns success/failure. All writes and send attempts are audited (NFR-O1/NFR-O2). Runtime delivery failures during FR-26 are logged, never thrown away silently.
 
 ### AD-15 — Admin-Configurable Backup Destinations (NFR-R3)
 
 - **Binds:** Epic 3 (FR-29), NFR-R3, NFR-S4, NFR-O2, NFR-R2, AD-1, AD-11
 - **Prevents:** backup targets hard-coded into env/deploy config requiring a redeploy to change; two modules writing conflicting destination settings; backup credentials stored or displayed in plaintext
 - **Rule:** Backup destinations are **system-wide operational settings owned by the Admin module**. They are edited only from the Admin panel (FR-29) by users holding the admin-only `admin.settings.backup` permission (AD-6/AD-12), and persist in the Admin-owned **`backup_destinations`** table (AD-11). One or more destinations are configurable (NFR-R3 makes ≥1 required); each records a **mechanism type** (S3-compatible object store, FTP/SFTP, local filesystem, or other), endpoint/host, bucket/path, credentials, and an optional schedule/frequency. Credentials are stored **encrypted at rest** (app-level key from env/secret-manager, NFR-S4) and **write-only/masked** in the UI. A **"test connection"** action verifies reachability and writes a test object. The backup job reads destinations through the Admin module's exported **settings port**; it never embeds its own copy. All writes and test/rotate actions are audited (NFR-O1/NFR-O2); failed backups are logged and alert via the status dashboard (no automated email/push in V1, PRD §5).
+
+### AD-16 — Named Schedule Catalog (Admin-Owned, Cross-Module)
+
+- **Binds:** Epic 2 (FR-8, FR-9, FR-30), Epic 3 (FR-30), AD-5, AD-11
+- **Prevents:** hard-coded intervals scattered across tool/tool-type rows; schedule definitions duplicated or inconsistently edited across future modules; tightly-coupled timing fields that would block extending schedules with a day-of-week/time part later
+- **Rule:** **Schedules** are a **named catalog owned by the Admin module** (a cross-cutting operational setting reusable by future modules — vehicle logs, event scheduling — not tool-specific business logic). Each schedule row has a **`name`** (e.g. "1 year", "1 quarter", "1 month", "2 weeks", "3 days") and, for V1, a **repeating interval** expressed as a unit + magnitude (e.g. `interval_unit`, `interval_magnitude`) that the shared inspection clock (AD-5) uses. Schedules are **prepared for future enhancement**: each row also carries a reserved **weekday set** (one or several days of week) and a **time-of-day** part, similar in spirit to cron — **nullable/unused in V1** but part of the schema so a later composite timing (e.g. "every Monday & Thursday at 08:00") needs no migration. Admins create/edit/archive schedules (FR-30) via the admin-only `schedules.manage` permission (AD-6/AD-12). Lenient validation in V1: a schedule must have a name and an interval; the weekday/time fields are optional and ignored until a later enhancement. **Tool Types and Tools reference a schedule by FK** (default schedule per tool type; optional per-tool choice), reading the schedule through the Admin module's **settings/schedule port** — never by duplicating the interval, and never by authoring `schedules` rows themselves (AD-11).
 
 ## Consistency Conventions
 
@@ -262,18 +268,19 @@ The one golang-migrate schema (NFR-R2, AD-11) holds every table the app persists
 | 9 | `qualifications` | The qualification vocabulary (e.g. "Chainsaw", "Generator") | User | The recognised safety certificates. |
 | 10 | `user_qualifications` | Which certificates a person holds (many-to-many) | User | "This person holds the Chainsaw certificate." Feeds AD-7 gating. |
 | 11 | `audit_log` | Immutable record of auth, permission, inspection, reinstate, qualification & DSGVO events | User | Compliance trail (NFR-O1, NFR-O2). |
-| 12 | `tool_types` | Equipment categories (chainsaw, generator…) + default schedule, mode, required qualification | Tool | The equipment catalogue; defines default inspection schedule + pass/fail or checklist mode (FR-8). Label + `attributes JSONB`. |
+| 12 | `tool_types` | Equipment categories (chainsaw, generator…) + default schedule, mode, required qualification | Tool | The equipment catalogue; defines a **default schedule** (FK → `schedules`) + pass/fail or checklist mode (FR-8). Label + `attributes JSONB`. |
 | 13 | `tool_type_qualifications` | Which qualification is required to inspect each tool type (cross-module ref) | Tool | Gating link — a tool type's required certificate (FR-8, AD-7). |
 | 14 | `checklist_items` | The checklist questions/tasks a tool type defines | Tool | Definition of checklist-based inspection (FR-8, FR-12, FR-23). `schedule_override`-style ordering is code-level. |
-| 15 | `tools` | Individual physical items, each belonging to a tool type | Tool | The actual equipment on site. `schedule_override date` (custom interval, FR-9) + `attributes JSONB` (FR-10). |
+| 15 | `tools` | Individual physical items, each belonging to a tool type | Tool | The actual equipment on site. Optional **`schedule_id`** (per-tool schedule choice, FK → `schedules`; null = use tool type default) (FR-9) + `attributes JSONB` (FR-10). |
 | 16 | `inspections` | Every inspection run (header): tool, inspector, date, result | Tool | The inspection log (FR-18). Never deleted; anonymised on user deletion (FR-24). |
 | 17 | `inspection_items` | Per-checkline results for checklist inspections | Tool | Checklist details, if the tool type is checklist mode (FR-12). |
 | 18 | `reinstatements` | Out-of-Service clearing events (actor, reason, date) | Tool | Who cleared a tool Out-of-Service and why (AD-9). Sole exit from OOS (AD-4). |
 | 19 | `password_reset_tokens` | Single-use, expiring credential-recovery tokens (hashed value, user, expiry, agent/approver) | User | Powers FR-26 forgot-password reset and FR-27 dual-admin recovery. One active token per user; new request invalidates older ones (AD-13). |
 | 20 | `smtp_settings` | Admin-configured SMTP email-delivery parameters (host, port, security, sender, username, encrypted password) | Admin | System-wide config, edited once from the Admin UI (FR-28, AD-14). Password encrypted at rest; write-only/masked. Consumed by the User module's email adapter via Admin's settings port. |
 | 21 | `backup_destinations` | Admin-configured backup targets (type S3/FTP/etc., endpoint, bucket/path, credentials, schedule) | Admin | Where automated backups are delivered (NFR-R3, AD-15). Edited once from the Admin UI (FR-29). Credentials encrypted at rest; masked in UI. |
+| 22 | `schedules` | The **named schedule catalog** (e.g. "1 year", "1 quarter", "1 month", "2 weeks", "3 days"): name + V1 interval (unit/magnitude) + reserved weekday-set & time-of-day fields for future composite timing | Admin | Cross-cutting config reusable by future modules (FR-30, AD-16). Tool Types (`default_schedule_id`) and Tools (`schedule_id`) reference rows by FK; admins create/edit via `schedules.manage`. Weekday/time fields nullable & unused in V1 (cron-like, AD-16). |
 
-> **Attribution:** tables 1–11 and **19** belong to the **User** hexagon, 12–18 to the **Tool** hexagon, and **20–21** (operational settings: `smtp_settings`, `backup_destinations`) to the **Admin** hexagon. The Admin module owns these two small configuration tables (AD-14/AD-15) and no others — it otherwise configures through the Tool module's config port and the User module's lifecycle/credential-recovery ports (AD-8, AD-10, AD-13).
+> **Attribution:** tables 1–11 and **19** belong to the **User** hexagon, 12–18 to the **Tool** hexagon, and **20–22** (operational settings: `smtp_settings`, `backup_destinations`, `schedules`) to the **Admin** hexagon. The Admin module owns these three small configuration tables (AD-14/AD-15/AD-16) and no others — it otherwise configures through the Tool module's config port and the User module's lifecycle/credential-recovery ports (AD-8, AD-10, AD-13).
 
 ### Base permission series (visible from day one)
 
@@ -301,6 +308,7 @@ Every **action** in the app maps to exactly one permission code (AD-12). This is
 | `admin.recovery.approve` | Authorize credential recovery for a locked-out/forgotten admin (FR-27) | User |
 | `admin.settings.email` | Configure SMTP/email-delivery settings in the Admin panel (FR-28) | Admin |
 | `admin.settings.backup` | Configure backup destinations in the Admin panel (FR-29) | Admin |
+| `schedules.manage` | Create/edit/archive named schedules in the catalog (FR-30) | Admin |
 
 ### Base role matrix
 
@@ -328,6 +336,7 @@ The **additive** permission set each of the four base roles ships with. A tick m
 | `admin.recovery.approve` | | | | ✔ |
 | `admin.settings.email` | | | | ✔ |
 | `admin.settings.backup` | | | | ✔ |
+| `schedules.manage` | | | | ✔ |
 
 > **Reading the matrix:** `helfende` = "volunteer who inspects". `schirrmeister` = **equipment caretaker** — everything a volunteer can do, **plus** managing tools and tool types (and their inspection history). `fuehrende` = **leadership** — inspection plus history, PDF export, and reinstate (but not tool/tool-type administration, which belongs to the Schirrmeister). `admin` = **everything**. All four are editable by an admin, and new custom groups can be added (AD-12). Inspection still always needs the tool type's required qualification (AD-7), independent of these roles.
 
@@ -350,6 +359,8 @@ erDiagram
     QUALIFICATIONS ||--o{ TOOL_TYPE_QUALIFICATIONS : required_by
     TOOL_TYPES ||--o{ CHECKLIST_ITEMS : defines
     TOOL_TYPES ||--o{ TOOLS : classifies
+    TOOL_TYPES }|--|| SCHEDULES : default_schedule
+    TOOLS }o--|| SCHEDULES : chosen_schedule
     TOOLS ||--o{ INSPECTIONS : receives
     INSPECTIONS ||--o{ INSPECTION_ITEMS : has
     USERS ||--o{ INSPECTIONS : performs
@@ -368,6 +379,7 @@ erDiagram
     class PASSWORD_RESET_TOKENS u
     class SMTP_SETTINGS a
     class BACKUP_DESTINATIONS a
+    class SCHEDULES a
     class USER_GROUP_MEMBERS ujunc
     class USER_PERMISSION_GROUPS ujunc
     class PERMISSION_GROUP_PERMISSIONS ujunc
@@ -512,13 +524,14 @@ stateDiagram-v2
 | Capability / Area | Lives in | Governed by |
 | --- | --- | --- |
 | Epic 1 — User Directory & Auth (FR-1..FR-7, FR-25..FR-27) | `internal/user` hexagon (core + auth port) | AD-2, AD-3, AD-13 |
-| Epic 2 — Tool Maintenance (FR-8..FR-18) | `internal/tools` hexagon | AD-4, AD-5, AD-7, AD-9, AD-10 |
-| Epic 3 — Admin & Config (FR-19..FR-24, FR-28, FR-29) | `internal/admin` hexagon | AD-2, AD-6, AD-8, AD-10, AD-14, AD-15 |
+| Epic 2 — Tool Maintenance (FR-8..FR-18) | `internal/tools` hexagon | AD-4, AD-5, AD-7, AD-9, AD-10, AD-16 |
+| Epic 3 — Admin & Config (FR-19..FR-24, FR-28, FR-29, FR-30) | `internal/admin` hexagon | AD-2, AD-6, AD-8, AD-10, AD-14, AD-15, AD-16 |
 | Cross-module auth/permissions | `internal/user` auth port consumed by all | AD-2, AD-6, AD-11, AD-12 |
 | Permission model (roles, additive access, action match) | `internal/user` core (vocabulary + resolution) | AD-12, AD-2, AD-6 |
 | Password self-service & admin credential recovery (FR-25/26/27) | `internal/user` core (credentials + reset tokens) | AD-13, AD-2 |
 | SMTP/email-settings configuration (FR-28) | `internal/admin` settings; consumed by User email adapter | AD-14, AD-2 |
 | Backup destination configuration (FR-29) | `internal/admin` settings; consumed by backup job | AD-15 |
+| Schedule catalog (FR-30) | `internal/admin` settings; schedule rows consumed by Tool module (tool-type default / per-tool choice) | AD-16, AD-5, AD-11 |
 | Tool status & dashboard | `internal/tools` (derived) | AD-4, AD-5 |
 | Tool/Tool-Type config write path | Admin triggers → Tool module config port | AD-10 |
 | DSGVO ops (FR-24) / user lifecycle | Admin trigger → composition-root orchestration → owning-module ports | AD-8, AD-11 |
@@ -529,7 +542,8 @@ stateDiagram-v2
 - **Frontend framework internals** (router, state, component library, styling) — pick within React+Vite+TS in the frontend epic; the invariants above don't depend on them.
 - **Go routing/middleware implementation details** — chi is pinned (Stack) but per-route/per-module middleware composition is left to the epic; note the auth gateway and server-side policy (AD-2/AD-6) are wired at the composition root, not duplicated per epic.
 - **Migration-tool rollback mechanics** — golang-migrate forward migrations are the contract (NFR-R2); detailed rollback procedure is documented per migration at build time.
+- **Composite schedule timing (weekday set + time-of-day)** — the named `schedules` catalog (AD-16) reserves cron-like `weekday`/`time_of_day` fields, but V1 drives due dates purely from each schedule's repeating interval (AD-5). The actual composite engine (advancing `next_due` to the next weekday/time occurrence, e.g. "every Monday & Thursday at 08:00") is **deferred to a future enhancement**; the schema already carries the fields so no migration is needed then. The weekday/time fields are nullable and unused in V1 (lenient validation, AD-16).
 - **Backup destination mechanics** — automated pg backup to ≥1 configurable destination and a documented restore procedure are required (NFR-R3); the concrete mechanism (S3/FTP/local) as well as the exact libraries are deferred to the deploy epic, but the destinations themselves are now **admin-configurable at runtime** via FR-29/AD-15 (Admin-owned `backup_destinations`), not env-locked.
 - **CI/CD pipeline configuration** — required gates (lint NFR-M3, tests NFR-M2, dependency audit) are set; the provider and workflow files are deferred to the deploy epic.
 - **TOTP/MFA library choice and email-send provider** — required by FR-4/FR-5 and FR-26 (forgot-password email); concrete libraries deferred to the User Directory epic. Capability shape fixed here: transactional SMTP sender for the single FR-26 email, with **delivery parameters admin-configurable at runtime** (FR-28, AD-14, addendum "Password Management Decisions"), never automated notification emails (PRD §5).
-- **Interactive diagram viewer** — the spine's mermaid diagrams should be click-to-enlarge with pan/zoom inside the enlarged view. This is deferred until the Docusaurus docs site exists (NFR-M4): implement there as a custom `@docusaurus/theme-mermaid` component (enlarge overlay + pan). No change needed now; the diagrams are authored as plain mermaid and stay renderer-agnostic.
+- ~~**Interactive diagram viewer** — the spine's mermaid diagrams should be click-to-enlarge with pan/zoom inside the enlarged view.~~ **DONE (docs site):** implemented in the Docusaurus theme as a swizzled `@theme/Mermaid` component (`docs/src/theme/Mermaid/`) — every mermaid diagram is click-to-zoom (expand button + click), and the fullscreen overlay supports drag-to-pan, scroll-wheel zoom-in/out, and `+`/`−`/`Reset` controls, closing via `×`, click-outside `Esc`. Marked complete at time of writing; remaining renderer-agnostic plain-mermaid authoring unchanged.
