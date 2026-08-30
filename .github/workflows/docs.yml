@@ -2,8 +2,6 @@ name: docs
 
 on:
   push:
-    branches:
-      - dev
     paths:
       - 'docs/**'
       - '.github/workflows/docs.yml'
@@ -47,7 +45,7 @@ jobs:
           path: docs/build
 
   deploy:
-    if: github.ref == 'refs/heads/dev'
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
