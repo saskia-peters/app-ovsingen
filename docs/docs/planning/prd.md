@@ -218,7 +218,7 @@ Full inspection history per Tool is stored and accessible to **Fuehrung** and **
 
 #### 4.3 Admin & Configuration Module
 **Description:**
-The admin module is a separate, isolated interface within the ecosystem, accessible exclusively to users holding the Admin permission. It exposes all configuration surfaces: user approvals, group and qualification management, Tool Type and Tool configuration, SMTP/email-delivery settings (FR-28), and DSGVO compliance operations. Realizes UJ-3.
+The admin module is a separate, isolated interface within the ecosystem, accessible exclusively to users holding the Admin permission. It exposes all configuration surfaces: user approvals, group and qualification management, Tool Type and Tool configuration, **operational settings (SMTP/email delivery FR-28 and backup destinations FR-29)**, and DSGVO compliance operations. Realizes UJ-3.
 
 **Functional Requirements:**
 
@@ -298,6 +298,15 @@ Administrators can configure SMTP email-delivery parameters directly in the admi
   - Invalid or unreachable SMTP configuration surfaces a clear validation/send error rather than failing silently; any FR-26 send failure is logged (NFR-O1).
   - Access to this surface is limited to the Admin permission (FR-19) and an admin-only action permission (`admin.settings.email`).
 
+#### FR-29: Backup Destination Configuration (Admin Interface)
+Administrators can configure the automated-backup delivery targets directly in the admin interface, so backup destinations can be added or changed without redeploying or editing environment configuration.
+- **Consequences (testable):**
+  - The admin panel exposes a backup-destination surface where at least one destination can be configured (NFR-R3 makes ≥1 required); each destination has a **mechanism type** (S3-compatible, FTP/SFTP, local filesystem, or other), endpoint/host, bucket/path, and credentials.
+  - Credentials are stored **encrypted at rest** (app-level key from env/secret-manager, NFR-S4) and are **write-only/masked** in the UI (never displayed in plaintext).
+  - The admin can trigger a **"test connection"** that verifies reachability and writes a test object, returning a clear success/failure result.
+  - Saved destinations are used by the backup job without a redeploy; a failed backup is logged (NFR-O1) and surfaced, never silently dropped.
+  - Access is limited to the Admin permission (FR-19) and an admin-only action permission (`admin.settings.backup`).
+
 ## 4.4 Cross-Cutting Non-Functional Requirements
 
 ### Security
@@ -347,7 +356,7 @@ Administrators can configure SMTP email-delivery parameters directly in the admi
 ### 6.1 In Scope
 * **Epic 1 – User Directory & Authentication:** Email login, password policy (min 10 chars), progressive lockout, optional TOTP MFA, self-registration with Admin approval, group/permission management, flexible user attributes, **self-service password management (change own password, forgot-password recovery email), dual-admin bootstrap and dual-control credential recovery** (FR-1 through FR-7, **FR-25 through FR-27**).
 * **Epic 2 – Tool Maintenance Module:** Tool Type and Tool management, CSV import, flexible attributes, qualification-gated inspections for Helfer\*in and Fuehrung, checklist and pass/fail inspection modes, Out of Service flagging, Out of Service reinstatement by Fuehrung/Admin (clock reset), color-coded Status Dashboard, PDF report export, inspection history (FR-8 through FR-18).
-* **Epic 3 – Admin & Configuration Module:** Isolated admin panel, user approval workflow, user/group administration, qualification management, tool/tool type configuration, **SMTP/email-settings configuration for password-recovery emails**, DSGVO compliance operations including anonymized deletion (FR-19 through FR-24, **FR-28**).
+* **Epic 3 – Admin & Configuration Module:** Isolated admin panel, user approval workflow, user/group administration, qualification management, tool/tool type configuration, **SMTP/email-settings and backup-destination configuration**, DSGVO compliance operations including anonymized deletion (FR-19 through FR-24, **FR-28, FR-29**).
 * **Infrastructure:** Docker containerization, persistent database with versioned migrations, configurable automated backups and restore.
 
 ### 6.2 Out of Scope for MVP
