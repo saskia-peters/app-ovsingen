@@ -242,6 +242,7 @@ function Overlay({value, onClose}: {value: string; onClose: () => void}): ReactN
   return (
     <div
       className={styles.backdrop}
+      data-testid="mermaid-overlay"
       ref={viewportRef}
       onWheel={onWheel}
       onPointerDown={onPointerDown}
@@ -286,6 +287,7 @@ function Overlay({value, onClose}: {value: string; onClose: () => void}): ReactN
           <div
             ref={svgWrapRef}
             className={styles.transform}
+            data-testid="mermaid-overlay-transform"
             style={
               box
                 ? {

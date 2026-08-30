@@ -23,6 +23,10 @@ docs-build:
 docs-serve:
     cd docs && npm run build && npm run serve
 
+# Build and run the docs Playwright browser tests (mermaid overlay, etc.)
+docs-test:
+    cd docs && npm run build && npx playwright test
+
 # Clear Docusaurus caches
 docs-clear:
     cd docs && npm run clear
