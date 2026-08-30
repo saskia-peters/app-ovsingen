@@ -1,0 +1,6 @@
+# BMad generated artifacts
+_bmad-output/
+.agent/
+skills/reports/
+
+# BMad personal overrides (gitignored by design, see _bmad/custom/.gitignore)
