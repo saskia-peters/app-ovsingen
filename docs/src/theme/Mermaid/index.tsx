@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   type ReactNode,
 } from 'react';
 import ErrorBoundary from '@docusaurus/ErrorBoundary';
@@ -131,9 +132,12 @@ type Vec2 = {x: number; y: number};
 
 function Overlay({value, onClose}: {value: string; onClose: () => void}): ReactNode {
   const baseConfig = useMermaidConfig();
+  // Memoize so the config reference is stable across renders — otherwise
+  // useMermaidRenderResult re-renders mermaid on every render (infinite loop).
+  const crisp = useMemo(() => crispConfig(baseConfig), [baseConfig]);
   const renderResult = useMermaidRenderResult({
     text: value,
-    config: crispConfig(baseConfig),
+    config: crisp,
   });
 
   const viewportRef = useRef<HTMLDivElement>(null);
