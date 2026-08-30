@@ -4,12 +4,11 @@
 
 .svgContainer > svg {
   max-width: 100%;
-  height: auto;
 }
 
 .wrapper {
   position: relative;
-  display: inline-block;
+  display: block;
   max-width: 100%;
 }
 

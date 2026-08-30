@@ -3,6 +3,10 @@
 
 set shell := ["bash", "-cu"]
 
+# Alias: list all available recipes when run without arguments
+default:
+    @just --list
+
 # Install docs dependencies
 docs-install:
     cd docs && npm install
@@ -22,7 +26,3 @@ docs-serve:
 # Clear Docusaurus caches
 docs-clear:
     cd docs && npm run clear
-
-# Alias: start the docs dev server
-default:
-    @just docs-start
