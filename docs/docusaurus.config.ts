@@ -9,7 +9,7 @@ const projectName = 'app-ovsingen';
 const config: Config = {
   title: 'THW OV Singen App',
   tagline: 'Operational equipment management for the THW Ortsverband Singen',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/logo.svg',
 
   future: {
     v4: true,
@@ -79,6 +79,12 @@ const config: Config = {
         {
           href: `https://github.com/${organizationName}/${projectName}`,
           label: 'GitHub',
+          position: 'right',
+        },
+        {
+          type: 'doc',
+          docId: 'management-overview',
+          label: 'Overview',
           position: 'right',
         },
       ],

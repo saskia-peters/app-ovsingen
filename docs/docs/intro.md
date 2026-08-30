@@ -8,6 +8,10 @@ The **THW OV Singen App** modernizes and centralizes the operational equipment m
 
 This documentation site is generated from the BMad planning artifacts (PRD, product brief, architecture spine) and will grow with the project: API contracts and module integration points are published here per NFR-M4.
 
+## [Management Overview](/docs/management-overview)
+
+A plain-language overview of the app for decision-makers and new team members.
+
 ## Planning documents
 
 - [PRD — THW OV Singen App](/docs/planning/prd) — functional requirements, epics, and non-functional guidelines

@@ -1,30 +1,111 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * THW OV Singen App — Docusaurus theme.
+ * Brand: THW-Blau (RAL 5002 Ultramarine / Pantone 286) ≈ #003399.
+ * Status colors (Green/Orange/Red) match the app's dashboard semantics.
  */
 
-/* You can override the default Infima variables here. */
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
+  --thw-blue: #003399;
+  --thw-navy: #001a66;
+  --thw-navy-deep: #00124d;
+  --thw-orange: #f5821f;
+
+  --ifm-color-primary: #003399;
+  --ifm-color-primary-dark: #002d88;
+  --ifm-color-primary-darker: #002777;
+  --ifm-color-primary-darkest: #001e59;
+  --ifm-color-primary-light: #1f47b8;
+  --ifm-color-primary-lighter: #3a5dc4;
+  --ifm-color-primary-lightest: #6f8cd6;
   --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --docusaurus-highlighted-code-line-bg: rgba(0, 51, 153, 0.1);
+  --ifm-hero-background-color: #003399;
+  --ifm-footer-background-color: var(--thw-navy-deep);
+  --ifm-toc-border-color: #e3e8f0;
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
+/* Lighter blue family so links/buttons stay readable on dark background */
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  --thw-blue: #7aa2ff;
+  --thw-navy: #2a3f8f;
+  --thw-navy-deep: #0d1b4d;
+
+  --ifm-color-primary: #6690f0;
+  --ifm-color-primary-dark: #5a80dd;
+  --ifm-color-primary-darker: #4f72c9;
+  --ifm-color-primary-darkest: #3f5ba0;
+  --ifm-color-primary-light: #7aa1f5;
+  --ifm-color-primary-lighter: #8db0f8;
+  --ifm-color-primary-lightest: #b3c9fb;
+  --docusaurus-highlighted-code-line-bg: rgba(127, 162, 255, 0.2);
+  --ifm-footer-background-color: #0a1330;
+}
+
+.navbar {
+  background-color: var(--thw-navy);
+}
+
+.navbar__title,
+.navbar__link,
+.navbar__item a {
+  color: #ffffff;
+}
+
+.navbar__link:hover,
+.navbar__link--active {
+  color: #c9d6ff;
+}
+
+.navbar__brand {
+  color: #ffffff;
+}
+
+.footer {
+  background-color: var(--ifm-footer-background-color);
+  color: #dfe6f5;
+}
+
+.footer a {
+  color: #b8cbff;
+}
+
+.footer a:hover {
+  color: #ffffff;
+}
+
+.hero--primary {
+  background: linear-gradient(135deg, #003399 0%, #002570 55%, #001a55 100%);
+}
+
+html[data-theme='dark'] .hero--primary {
+  background: linear-gradient(135deg, #14306e 0%, #0d1f4f 55%, #0a1739 100%);
+}
+
+.hero__title,
+.hero__subtitle {
+  color: #ffffff;
+}
+
+.hero--primary .button--secondary {
+  background-color: #ffffff;
+  color: #003399;
+}
+
+html[data-theme='dark'] .hero--primary .button--secondary {
+  background-color: #dbe4ff;
+  color: #001a66;
+}
+
+.hero--primary .button--secondary:hover {
+  background-color: #e5ecff;
+  color: #001a66;
+}
+
+/* Slightly condensed docs layout */
+.table-of-contents__link:hover {
+  color: #003399;
+}
+
+html[data-theme='dark'] .table-of-contents__link:hover {
+  color: #8db0f8;
 }
