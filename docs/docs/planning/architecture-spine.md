@@ -59,9 +59,9 @@ flowchart TD
 
 ### AD-2 — User Directory & Auth Owns Identity and Permissions
 
-- **Binds:** Epic 1 (FR-1..FR-6, FR-20, FR-21, FR-22), Epic 2 (FR-11), Epic 3 (FR-19, FR-20, FR-24), NFR-S2, NFR-S3
+- **Binds:** Epic 1 (FR-1..FR-6, FR-20, FR-21, FR-22, FR-25, FR-26, FR-27), Epic 2 (FR-11), Epic 3 (FR-19, FR-20, FR-24), NFR-S2, NFR-S3
 - **Prevents:** auth/permission logic being duplicated or owned by Tool Maintenance or Admin; divergent permission checks across modules; admin isolation leaking
-- **Rule:** The User Directory & Auth module is the single owner of users, groups, permissions, sessions, MFA/TOTP, account state (pending_approval/active/deactivated), and qualifications. It exposes a single port — `Service` — from which consumers resolve the current caller's identity, the caller's **granted Qualifications** (for AD-7), and the caller's *resolved permission set* (the additive union of all permission-group and direct grants, AD-12). Tool Maintenance and Admin consume only this port; they never store auth data, never author their own SQL over user/qualification tables, and never implement their own permission checks. FR-19 (admin route isolation, HTTP 403, existence hidden) is enforced server-side in the composition-root gateway against this port. **Permission and qualification revocation takes effect immediately on the very next check** — the auth port resolves against the live user state per request, never against a session-cached permission snapshot (FR-21/FR-22). New approved users are seeded with the `helfende` base role (AD-12, FR-5/FR-20).
+- **Rule:** The User Directory & Auth module is the single owner of users, groups, permissions, sessions, MFA/TOTP, credentials and password-recovery tokens, account state (pending_approval/active/deactivated), and qualifications. It exposes a single port — `Service` — from which consumers resolve the current caller's identity, the caller's **granted Qualifications** (for AD-7), and the caller's *resolved permission set* (the additive union of all permission-group and direct grants, AD-12). Tool Maintenance and Admin consume only this port; they never store auth data, never author their own SQL over user/qualification tables, and never implement their own permission checks. FR-19 (admin route isolation, HTTP 403, existence hidden) is enforced server-side in the composition-root gateway against this port. **Permission and qualification revocation takes effect immediately on the very next check** — the auth port resolves against the live user state per request, never against a session-cached permission snapshot (FR-21/FR-22). New approved users are seeded with the `helfende` base role (AD-12, FR-5/FR-20). Password self-service, forgot-password recovery, and dual-control admin recovery all live in this module (FR-25/26/27, AD-13).
 
 ### AD-3 — First-Class Columns + JSONB Extension Surface
 
@@ -128,6 +128,16 @@ flowchart TD
   - **V1 flatness:** because groups cannot nest, resolution is a single level of union over a user's groups plus direct grants; there is no transitive inclusion to compute.
   - **User groups are organisational only** (team membership) and grant **no** permission by themselves — only the permission-group/direct-grant path affects access (isolation from `user_groups` in the resolution, AD-2).
   - On approval (FR-5/FR-20) a new user is seeded with the **`helfende`** base role; an admin can add/remove roles thereafter.
+
+### AD-13 — Self-Service Password Management + Dual-Admin Credential Recovery
+
+- **Binds:** Epic 1 (FR-25, FR-26, FR-27), NFR-S2, NFR-S4, NFR-O2, AD-2, AD-12
+- **Prevents:** passwords unrecoverable for day-to-day users; single-admin accounts that a single compromise could take over; admin lockout with no safe recovery path; reset tokens that are replayable or long-lived
+- **Rule:** The User module owns all credential and recovery flows (FR-25/26/27, AD-2) and exposes them purely through its `Service` port:
+  - **Change own password (FR-25).** Any authenticated user changes their own password by confirming the current password and satisfying the FR-2 policy (≥ 10 chars). Password hashes use Argon2id; plaintext is never stored or logged. A successful change revokes the user's other server-side sessions and is audited (NFR-O1). No elevated permission is required — access is intrinsic to one's own account (no `*` permission needed; gated only by authentication, consistent with AD-12's "one permission per action", where ownership of self is the capability).
+  - **Forgot-password reset (FR-26).** The login flow accepts an email; if it matches an `active` account, the module emits a **single transactional email** (SMTP, env/secrets-configured, NFR-S4) carrying a single-use, 30-minute, hashed-at-rest reset token (newer request invalidates older ones). Response is uniform for known/unknown email (no enumeration, NFR-S1-friendly). Reset enforces FR-2 and revokes sessions; audited. This email is the **only** email in V1 and does not reopen the automated-notification non-goal (PRD §5).
+  - **Dual-admin recovery (FR-27).** Exactly **two `admin` accounts are seeded** at deployment; credentials are generated and distributed out-of-band (NFR-S4), never in VCS. An admin in a locked-out/forgotten state **cannot** self-reset via the FR-26 flow alone; recovery requires the **other admin's** authorization, is gated by an admin-only permission (see base series `admin.recovery.approve`), and is recorded as a high-severity immutable audit event (NFR-O2). Recovery of the **last remaining** admin is deliberately **not** reachable by any self-service path; it is a documented, out-of-band manual bootstrap requiring both admins (or a designated recovery sponsor). Recovery always enforces FR-2.
+- **Seeding note (extends AD-12/FR-5):** the two base admins are seeded with the `admin` role and the `admin.recovery.approve` permission; all four base roles plus the two admin accounts are part of the cold-start migration seed (NFR-R2).
 
 ## Consistency Conventions
 
@@ -226,7 +236,7 @@ flowchart LR
 
 ## Database Artifacts
 
-The one golang-migrate schema (NFR-R2, AD-11) holds every table the app persists. **User Groups** (who people are / how volunteers are organised) and **Permission Groups** (what people are allowed to do) are **two separate tables** — a volunteer's team membership is independent of the access they hold (FR-6, FR-21). Roles and permission groups are the **same kind of entity**: the four base roles (`helfende`, `fuehrende`, `admin`, `schirrmeister`) are just pre-seeded permission groups; admins can create more named ones (AD-12). Permission groups are **flat — no groups inside groups in V1**. Each table below belongs to exactly one module and may only be reached through that module's port (AD-1, AD-11).
+The one golang-migrate schema (NFR-R2, AD-11) holds every table the app persists. **User Groups** (who people are / how volunteers are organised) and **Permission Groups** (what people are allowed to do) are **two separate tables** — a volunteer's team membership is independent of the access they hold (FR-6, FR-21). Roles and permission groups are the **same kind of entity**: the four base roles (`helfende`, `fuehrende`, `admin`, `schirrmeister`) are just pre-seeded permission groups; admins can create more named ones (AD-12). In addition to the base roles, the deployment seed creates **two `admin` accounts** (dual-admin bootstrap, FR-27 / AD-13) whose credentials are generated and distributed out-of-band. Permission groups are **flat — no groups inside groups in V1**. Each table below belongs to exactly one module and may only be reached through that module's port (AD-1, AD-11).
 
 | # | Table | Stores | Owned by | Notes / Non-technical meaning |
 | --- | --- | --- | --- | --- |
@@ -248,8 +258,9 @@ The one golang-migrate schema (NFR-R2, AD-11) holds every table the app persists
 | 16 | `inspections` | Every inspection run (header): tool, inspector, date, result | Tool | The inspection log (FR-18). Never deleted; anonymised on user deletion (FR-24). |
 | 17 | `inspection_items` | Per-checkline results for checklist inspections | Tool | Checklist details, if the tool type is checklist mode (FR-12). |
 | 18 | `reinstatements` | Out-of-Service clearing events (actor, reason, date) | Tool | Who cleared a tool Out-of-Service and why (AD-9). Sole exit from OOS (AD-4). |
+| 19 | `password_reset_tokens` | Single-use, expiring credential-recovery tokens (hashed value, user, expiry, agent/approver) | User | Powers FR-26 forgot-password reset and FR-27 dual-admin recovery. One active token per user; new request invalidates older ones (AD-13). |
 
-> **Attribution:** tables 1–11 belong to the **User** hexagon, 12–18 to the **Tool** hexagon. The Admin module owns no tables — it configures through the Tool module's config port and the User module's lifecycle port (AD-8, AD-10).
+> **Attribution:** tables 1–11 and **19** belong to the **User** hexagon, 12–18 to the **Tool** hexagon. The Admin module owns no tables — it configures through the Tool module's config port and the User module's lifecycle/credential-recovery port (AD-8, AD-10, AD-13).
 
 ### Base permission series (visible from day one)
 
@@ -274,6 +285,7 @@ Every **action** in the app maps to exactly one permission code (AD-12). This is
 | `qualifications.manage` | Create qualifications, assign/revoke on users (FR-22) | User |
 | `dsgvo.access_report` | Generate a user's data access report (FR-24) | User |
 | `dsgvo.delete` | Execute account deletion / right-to-be-forgotten (FR-24) | User |
+| `admin.recovery.approve` | Authorize credential recovery for a locked-out/forgotten admin (FR-27) | User |
 
 ### Base role matrix
 
@@ -298,6 +310,7 @@ The **additive** permission set each of the four base roles ships with. A tick m
 | `qualifications.manage` | | | | ✔ |
 | `dsgvo.access_report` | | | | ✔ |
 | `dsgvo.delete` | | | | ✔ |
+| `admin.recovery.approve` | | | | ✔ |
 
 > **Reading the matrix:** `helfende` = "volunteer who inspects". `schirrmeister` = **equipment caretaker** — everything a volunteer can do, **plus** managing tools and tool types (and their inspection history). `fuehrende` = **leadership** — inspection plus history, PDF export, and reinstate (but not tool/tool-type administration, which belongs to the Schirrmeister). `admin` = **everything**. All four are editable by an admin, and new custom groups can be added (AD-12). Inspection still always needs the tool type's required qualification (AD-7), independent of these roles.
 
@@ -315,6 +328,7 @@ erDiagram
     PERMISSIONS ||--o{ USER_PERMISSIONS : granted_to
     USERS ||--o{ USER_QUALIFICATIONS : holds
     QUALIFICATIONS ||--o{ USER_QUALIFICATIONS : held_by
+    USERS ||--o{ PASSWORD_RESET_TOKENS : issues
     TOOL_TYPES ||--o{ TOOL_TYPE_QUALIFICATIONS : requires
     QUALIFICATIONS ||--o{ TOOL_TYPE_QUALIFICATIONS : required_by
     TOOL_TYPES ||--o{ CHECKLIST_ITEMS : defines
@@ -333,6 +347,7 @@ erDiagram
     class PERMISSION_GROUPS u
     class PERMISSIONS u
     class QUALIFICATIONS u
+    class PASSWORD_RESET_TOKENS u
     class USER_GROUP_MEMBERS ujunc
     class USER_PERMISSION_GROUPS ujunc
     class PERMISSION_GROUP_PERMISSIONS ujunc
@@ -476,11 +491,12 @@ stateDiagram-v2
 
 | Capability / Area | Lives in | Governed by |
 | --- | --- | --- |
-| Epic 1 — User Directory & Auth (FR-1..FR-7) | `internal/user` hexagon (core + auth port) | AD-2, AD-3 |
+| Epic 1 — User Directory & Auth (FR-1..FR-7, FR-25..FR-27) | `internal/user` hexagon (core + auth port) | AD-2, AD-3, AD-13 |
 | Epic 2 — Tool Maintenance (FR-8..FR-18) | `internal/tools` hexagon | AD-4, AD-5, AD-7, AD-9, AD-10 |
 | Epic 3 — Admin & Config (FR-19..FR-24) | `internal/admin` hexagon | AD-2, AD-6, AD-8, AD-10 |
 | Cross-module auth/permissions | `internal/user` auth port consumed by all | AD-2, AD-6, AD-11, AD-12 |
 | Permission model (roles, additive access, action match) | `internal/user` core (vocabulary + resolution) | AD-12, AD-2, AD-6 |
+| Password self-service & admin credential recovery (FR-25/26/27) | `internal/user` core (credentials + reset tokens) | AD-13, AD-2 |
 | Tool status & dashboard | `internal/tools` (derived) | AD-4, AD-5 |
 | Tool/Tool-Type config write path | Admin triggers → Tool module config port | AD-10 |
 | DSGVO ops (FR-24) / user lifecycle | Admin trigger → composition-root orchestration → owning-module ports | AD-8, AD-11 |
@@ -493,5 +509,5 @@ stateDiagram-v2
 - **Migration-tool rollback mechanics** — golang-migrate forward migrations are the contract (NFR-R2); detailed rollback procedure is documented per migration at build time.
 - **Backup destination specifics** — automated pg backup to ≥1 configurable destination (env-driven) and a documented restore procedure are required (NFR-R3); the concrete destination (filesystem/object store) is deferred to the deploy epic/site.
 - **CI/CD pipeline configuration** — required gates (lint NFR-M3, tests NFR-M2, dependency audit) are set; the provider and workflow files are deferred to the deploy epic.
-- **TOTP/MFA library choice and email-send provider** — required by FR-4/FR-5; concrete libraries deferred to the User Directory epic.
+- **TOTP/MFA library choice and email-send provider** — required by FR-4/FR-5 and FR-26 (forgot-password email); concrete libraries deferred to the User Directory epic. Capability shape fixed here: transactional SMTP sender for the single FR-26 email (AD-13, addendum "Password Management Decisions"), never automated notification emails (PRD §5).
 - **Interactive diagram viewer** — the spine's mermaid diagrams should be click-to-enlarge with pan/zoom inside the enlarged view. This is deferred until the Docusaurus docs site exists (NFR-M4): implement there as a custom `@docusaurus/theme-mermaid` component (enlarge overlay + pan). No change needed now; the diagrams are authored as plain mermaid and stay renderer-agnostic.

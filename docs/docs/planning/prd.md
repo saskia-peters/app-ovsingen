@@ -9,7 +9,7 @@ sidebar_position: 1
 # PRD: THW OV Singen App
 
 ## 0. Document Purpose
-This Product Requirement Document (PRD) defines the scope, functional requirements, and non-functional guidelines for the first release (V1) of the **THW OV Singen App**. It is designed for product managers, system architects, software developers, and quality assurance engineers to guide design, implementation, and verification. The document is structured with glossary-anchored terms, globally numbered functional requirements, inline assumptions (indexed in Section 9), and explicit MVP boundaries. This V1 specification builds directly on the initial [Product Brief](/docs/planning/product-brief).
+This Product Requirement Document (PRD) defines the scope, functional requirements, and non-functional guidelines for the first release (V1) of the **THW OV Singen App**. It is designed for product managers, system architects, software developers, and quality assurance engineers to guide design, implementation, and verification. The document is structured with glossary-anchored terms, globally numbered functional requirements, inline assumptions (indexed in Section 9), and explicit MVP boundaries. This V1 specification builds directly on the initial [Product Brief](file:///home/saskia/devprojects/app-ovsingen/_bmad-output/planning-artifacts/briefs/brief-app-ovsingen-2026-08-29/brief.md).
 
 ## 1. Vision
 In the German Federal Agency for Technical Relief (THW) Ortsverband Singen, the operational readiness of specialized tools and equipment is a matter of life-saving importance. Yet, managing periodic equipment inspections, verifying personnel qualifications (such as chainsaw or generator operation), and tracking tool statuses has historically been manual and fragmented. The **THW OV Singen App** modernizes and centralizes this process, ensuring that every tool in the Ortsverband is inspected on time, by qualified volunteers, with transparent and immediate tracking.
@@ -88,7 +88,7 @@ For volunteers (**Helfer*in**), it offers a simple, mobile-friendly interface to
 
 #### 4.1 Standalone User Directory & Authentication
 **Description:**
-This feature provides the security and user foundation for the entire ecosystem. It allows users to register, log in securely, configure Multi-Factor Authentication (MFA), and assigns them to permission groups. To keep this module modular and reusable, the user database and authentication systems are isolated from the tool maintenance business logic.
+This feature provides the security and user foundation for the entire ecosystem. It allows users to register, log in securely, configure Multi-Factor Authentication (MFA), manage their own password (change while logged in, or recover via a forgot-password reset), and assigns them to permission groups. The ecosystem boots with two pre-seeded admin accounts whose recovery is protected by dual control. To keep this module modular and reusable, the user database and authentication systems are isolated from the tool maintenance business logic.
 
 **Functional Requirements:**
 
@@ -260,6 +260,34 @@ Admins can generate a user data access report and execute an account deletion ("
   - Inspection history records linked to a deleted user are **retained** but anonymized: the inspector reference is replaced with the string `"Deleted User"` and no personally identifying data is preserved in the record.
   - A deleted account cannot be re-activated; if the same person re-joins, they must self-register again.
 
+#### FR-25: Change Own Password (Authenticated)
+Any logged-in user can change their own password without administrator involvement.
+- **Consequences (testable):**
+  - The user must confirm their **current** password before the change is accepted.
+  - The new password must satisfy the password policy (≥ 10 characters, FR-2); violations are rejected with a clear validation error.
+  - A successful password change invalidates all of the user's other active sessions (server-side) and forces a re-login.
+  - The change is recorded in the audit log (NFR-O1) with actor and timestamp, but the password itself is never stored or logged in plaintext.
+
+#### FR-26: Self-Service Password Reset (Forgot Password)
+An authenticated-agnostic password recovery flow lets a user who has forgotten their password regain access without administrator involvement.
+- **Consequences (testable):**
+  - The login interface offers a "Forgot password?" flow that accepts the user's email address.
+  - If the email matches an existing `active` account, the system sends a **transactional email** containing a single-use, expiring reset link/token.
+  - A reset token is valid for at most 30 minutes, can be used only once, and is invalidated immediately upon use or expiry.
+  - The flow **does not reveal whether an email exists** in the system (uniform response for unknown email) to avoid account enumeration.
+  - Multiple outstanding reset requests for the same account invalidate earlier tokens (only the latest token is valid).
+  - The system logs the reset request and completion to the audit log; it does not notify the user's other sessions automatically.
+  - Note: this transactional account-recovery email is **distinct from, and does not reopen, the out-of-scope automated inspection/notification emails** (see §5, §6.2).
+
+#### FR-27: Admin Credential Recovery (Dual-Control)
+The system ships with **two pre-seeded admin accounts** from first deployment (the "dual admin" principle). Neither admin can reset the other's credentials unilaterally when the target is locked out or has forgotten their password.
+- **Consequences (testable):**
+  - Exactly two `admin`-role accounts are seeded at deployment time; their credentials are generated, distributed out-of-band to the two admin holders, and never stored in version control (NFR-S4).
+  - A locked-out or forgotten-password admin cannot self-reset their admin credentials via the standard FR-26 flow alone.
+  - Admin credential recovery requires **dual approval**: the second admin initiates/approves the recovery, and a recovery of an admin account is recorded as a high-severity immutable audit event (NFR-O2).
+  - A recovery of the **last remaining** admin account is not permitted through a single self-service path; the operational bootstrap override is a documented, out-of-band manual procedure requiring both admins (or a designated recovery sponsor) and leaves a mandatory audit entry.
+  - Password policy (≥ 10 characters, FR-2) applies to any recovered admin password.
+
 ## 4.4 Cross-Cutting Non-Functional Requirements
 
 ### Security
@@ -300,14 +328,14 @@ Admins can generate a user data access report and execute an account deletion ("
 * **No external system integrations:** No API connections to Helferportal, Hermine, THW Extranet, or any other external THW digital systems in V1.
 * **No tool reservations or booking:** The app does not support tool checkout, booking, or reservation workflows.
 * **No repair & issues tracking:** No workflow for logging external repair tasks, ordering spare parts, or tracking a tool's service history beyond inspection records.
-* **No automated alerting:** No email or push notifications for upcoming or overdue inspections. Status visibility is provided exclusively through the color-coded Status Dashboard.
+* **No automated alerting:** No email or push notifications for upcoming or overdue inspections. Status visibility is provided exclusively through the color-coded Status Dashboard. *(The single, self-service **transactional** account-recovery email in FR-26 is in scope and does not reopen this non-goal — it is triggered only by an explicit user action, never automatically.)*
 * **No multi-Ortsverband support:** The application serves only Ortsverband Singen. Cross-location access, shared user directories, or federated tooling are out of scope for V1.
 * **Future ecosystem modules:** Vehicle logs, event scheduling, operational reporting, and other planned modules are explicitly deferred to future releases. The modular foundation is built in V1; the modules themselves are not.
 
 ## 6. MVP Scope
 
 ### 6.1 In Scope
-* **Epic 1 – User Directory & Authentication:** Email login, password policy (min 10 chars), progressive lockout, optional TOTP MFA, self-registration with Admin approval, group/permission management, flexible user attributes (FR-1 through FR-7).
+* **Epic 1 – User Directory & Authentication:** Email login, password policy (min 10 chars), progressive lockout, optional TOTP MFA, self-registration with Admin approval, group/permission management, flexible user attributes, **self-service password management (change own password, forgot-password recovery email), dual-admin bootstrap and dual-control credential recovery** (FR-1 through FR-7, **FR-25 through FR-27**).
 * **Epic 2 – Tool Maintenance Module:** Tool Type and Tool management, CSV import, flexible attributes, qualification-gated inspections for Helfer\*in and Fuehrung, checklist and pass/fail inspection modes, Out of Service flagging, Out of Service reinstatement by Fuehrung/Admin (clock reset), color-coded Status Dashboard, PDF report export, inspection history (FR-8 through FR-18).
 * **Epic 3 – Admin & Configuration Module:** Isolated admin panel, user approval workflow, user/group administration, qualification management, tool/tool type configuration, DSGVO compliance operations including anonymized deletion (FR-19 through FR-24).
 * **Infrastructure:** Docker containerization, persistent database with versioned migrations, configurable automated backups and restore.
@@ -315,7 +343,7 @@ Admins can generate a user data access report and execute an account deletion ("
 ### 6.2 Out of Scope for MVP
 * Future ecosystem modules (vehicle logs, event scheduling, operational reporting, etc.) — deferred to V2+.
 * External API integrations — deferred to V2+. `[NOTE FOR PM]` If THW Helferportal integration becomes a strategic priority, this could move forward.
-* Automated email/push notifications — deferred to V2+.
+* Automated email/push notifications — deferred to V2+. *(The transactional account-recovery email for FR-26 is in scope and separate from automated notifications.)*
 * Tool reservations, repair tracking — explicitly out of scope (see §5).
 
 ## 8. Open Questions

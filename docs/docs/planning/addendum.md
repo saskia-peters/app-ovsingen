@@ -1,7 +1,6 @@
 ---
 sidebar_position: 4
 ---
-
 # Addendum: THW OV Singen App
 
 *This document preserves technical decisions, options considered, and implementation context that informs downstream work (architecture, solution design) but does not belong in the PRD itself.*
@@ -21,3 +20,17 @@ These choices were made by the product owner and recorded here for downstream ar
 | **Documentation** | Docusaurus | Project documentation site; API contracts and module integration points published here (see NFR-M4) |
 
 > **Note for architecture phase:** Framework choices within Go (e.g. routing library, ORM, migration tool) and TypeScript (e.g. React vs. Vue, component library) are deferred to the architecture document. The PRD's NFRs (modularity, test coverage, linting, structured logging, DB migrations) constrain those choices but do not prescribe them.
+
+---
+
+## Password Management Decisions
+
+Added to support FR-25, FR-26, and FR-27 (self-service password management and dual-admin recovery).
+
+| Concern | Decision | Notes |
+|---|---|---|
+| Password storage | Argon2id (memory-hard) via a maintained Go library | Never store passwords in plaintext or reversible form; hashing is out of band from the app's log data. Exact library pinned in the User epic. |
+| Email sending | **SMTP-compatible transactional sender** (e.g. app's own SMTP relay via env-configured host + credentials) for V1; a SaaS provider is a possible later swap | Deferred library/provider to the User epic. Must be configurable via env/secrets (NFR-S4). Used **only** for the FR-26 transactional reset email; no automated/notification emails in V1 (PRD §5). |
+| Reset tokens | Cryptographically random, high-entropy, hashed-at-rest, single-use, 30-minute expiry | One active token per user (new request invalidates older ones). Token hash stored, not the plaintext. |
+| Admin bootstrap | **Two pre-seeded `admin` accounts**, credentials generated and distributed out-of-band | Neither stored in VCS (NFR-S4). Dual-control recovery, FR-27. |
+| Dual-control recovery | Second admin authorizes recovery of a locked-out/forgotten admin; recovery of the last admin is a documented manual out-of-band procedure with a mandatory audit entry | Prevents single-account takeover; FR-27. |
