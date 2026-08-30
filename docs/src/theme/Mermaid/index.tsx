@@ -1,35 +1,47 @@
-import React, {useState, useRef, useCallback, useEffect, type ReactNode} from 'react';
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  type ReactNode,
+} from 'react';
 import ErrorBoundary from '@docusaurus/ErrorBoundary';
 import {ErrorBoundaryErrorMessageFallback} from '@docusaurus/theme-common';
 import {
   MermaidContainerClassName,
+  useMermaidConfig,
   useMermaidRenderResult,
 } from '@docusaurus/theme-mermaid/client';
 import type {Props} from '@theme/Mermaid';
-import type {RenderResult} from 'mermaid';
+import type {MermaidConfig} from 'mermaid';
 
 import styles from './styles.module.css';
 
+type RenderResultSvg = {svg: string; bindFunctions?: (e: HTMLElement) => void};
+
 function MermaidSvg({
-  renderResult,
+  svg,
+  bindFunctions,
   containerClassName,
 }: {
-  renderResult: RenderResult;
+  svg: string;
+  bindFunctions?: (e: HTMLElement) => void;
   containerClassName?: string;
 }): ReactNode {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const div = ref.current!;
-    renderResult.bindFunctions?.(div);
-  }, [renderResult]);
+    bindFunctions?.(div);
+  }, [bindFunctions, svg]);
 
   return (
     <div
       ref={ref}
       className={`${MermaidContainerClassName} ${styles.svgContainer} ${containerClassName ?? ''}`}
       // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{__html: renderResult.svg}}
+      dangerouslySetInnerHTML={{__html: svg}}
     />
   );
 }
@@ -40,10 +52,11 @@ const clamp = (value: number, min: number, max: number): number =>
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 8;
 
-function ExpandableDiagram({renderResult}: {renderResult: RenderResult}): ReactNode {
+function ExpandableDiagram({value}: {value: string}): ReactNode {
   const [expanded, setExpanded] = useState(false);
-
   const close = useCallback(() => setExpanded(false), []);
+  const open = useCallback(() => setExpanded(true), []);
+
   useEffect(() => {
     if (!expanded) {
       return undefined;
@@ -60,116 +73,177 @@ function ExpandableDiagram({renderResult}: {renderResult: RenderResult}): ReactN
   return (
     <>
       <div className={styles.wrapper}>
-        <button
-          type="button"
-          className={styles.expandButton}
-          aria-label="Expand diagram"
-          title="Expand diagram"
-          onClick={() => setExpanded(true)}>
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path d="M15 3h6v6h-2V5h-4V3zM9 3v2H5v4H3V3h6zm6 18h6v-6h-2v4h-4v2zm-6 0v-2H5v-4H3v6h6z" />
-          </svg>
-        </button>
-        <div
-          className={styles.inline}
-          role="button"
-          tabIndex={0}
-          aria-label="Expand diagram"
-          onClick={() => setExpanded(true)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              setExpanded(true);
-            }
-          }}>
-          <MermaidSvg renderResult={renderResult} />
-        </div>
+        <ExpandButton onClick={open} />
+        <InlineDiagram value={value} onExpand={open} />
       </div>
-
-      {expanded ? (
-        <Overlay renderResult={renderResult} onClose={close} />
-      ) : null}
+      {expanded ? <Overlay value={value} onClose={close} /> : null}
     </>
   );
 }
 
-function Overlay({
-  renderResult,
-  onClose,
-}: {
-  renderResult: RenderResult;
-  onClose: () => void;
-}): ReactNode {
-  const stageRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    originX: number;
-    originY: number;
-  } | null>(null);
-
-  const [transform, setTransform] = useState({x: 0, y: 0, zoom: 1});
-
-  const onWheel = useCallback(
-    (event: React.WheelEvent<HTMLDivElement>) => {
-      const view = viewRef.current;
-      if (!view) {
-        return;
-      }
-      event.preventDefault();
-      const rect = view.getBoundingClientRect();
-      const scale = Math.exp(-event.deltaY * 0.0016);
-      setTransform((prev) => {
-        const zoom = clamp(prev.zoom * scale, MIN_ZOOM, MAX_ZOOM);
-        const px = event.clientX - rect.left;
-        const py = event.clientY - rect.top;
-        return {
-          zoom,
-          x: px - (px - prev.x) * (zoom / prev.zoom),
-          y: py - (py - prev.y) * (zoom / prev.zoom),
-        };
-      });
-    },
-    [],
+function ExpandButton({onClick}: {onClick: () => void}): ReactNode {
+  return (
+    <button
+      type="button"
+      className={styles.expandButton}
+      aria-label="Expand diagram"
+      title="Expand diagram"
+      onClick={onClick}>
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <path d="M15 3h6v6h-2V5h-4V3zM9 3v2H5v4H3V3h6zm6 18h6v-6h-2v4h-4v2zm-6 0v-2H5v-4H3v6h6z" />
+      </svg>
+    </button>
   );
+}
 
-  const onPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    const stage = stageRef.current;
-    if (!stage) {
+function InlineDiagram({value, onExpand}: {value: string; onExpand: () => void}): ReactNode {
+  const renderResult = useMermaidRenderResult({text: value});
+  if (renderResult === null) {
+    return null;
+  }
+  return (
+    <div
+      className={styles.inline}
+      role="button"
+      tabIndex={0}
+      aria-label="Expand diagram"
+      onClick={onExpand}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onExpand();
+        }
+      }}>
+      <MermaidSvg svg={renderResult.svg} bindFunctions={renderResult.bindFunctions} />
+    </div>
+  );
+}
+
+// Crisp zoom: re-render labels as vector <text> instead of foreignObject HTML,
+// so scaling stays sharp. Only used in the overlay; inline keeps defaults.
+const crispConfig = (base: MermaidConfig): MermaidConfig => ({
+  ...base,
+  htmlLabels: false,
+  flowchart: {...base.flowchart, htmlLabels: false},
+});
+
+type Vec2 = {x: number; y: number};
+
+function Overlay({value, onClose}: {value: string; onClose: () => void}): ReactNode {
+  const baseConfig = useMermaidConfig();
+  const renderResult = useMermaidRenderResult({
+    text: value,
+    config: crispConfig(baseConfig),
+  });
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const svgWrapRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState<Vec2 | null>(null);
+  const vbRef = useRef<[number, number, number, number] | null>(null);
+
+  const [transform, setTransform] = useState({z: 1, tx: 0, ty: 0});
+
+  useLayoutEffect(() => {
+    const el = viewportRef.current;
+    if (!el) {
+      return undefined;
+    }
+    const measure = () =>
+      setViewport({x: el.clientWidth, y: el.clientHeight});
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const wrap = svgWrapRef.current;
+    if (!wrap || vbRef.current) {
       return;
     }
-    stage.setPointerCapture(event.pointerId);
-    dragRef.current = {
+    const svgEl = wrap.querySelector('svg');
+    if (!svgEl) {
+      return;
+    }
+    const vb = svgEl.getAttribute('viewBox');
+    if (vb) {
+      const nums = vb.trim().split(/[\s,]+/).map(Number);
+      if (nums.length === 4 && nums.every(Number.isFinite)) {
+        vbRef.current = [nums[0], nums[1], nums[2], nums[3]];
+      }
+    }
+  }, [renderResult]);
+
+  const drag = useRef<{pointerId: number; sx: number; sy: number; ox: number; oy: number} | null>(null);
+
+  const onPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button, a, [data-nopan]')) {
+      return;
+    }
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = {
       pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: transform.x,
-      originY: transform.y,
+      sx: event.clientX,
+      sy: event.clientY,
+      ox: transform.tx,
+      oy: transform.ty,
     };
   }, [transform]);
 
   const onPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) {
+    const d = drag.current;
+    if (!d || d.pointerId !== event.pointerId) {
       return;
     }
-    setTransform((prev) => ({
-      ...prev,
-      x: drag.originX + (event.clientX - drag.startX),
-      y: drag.originY + (event.clientY - drag.startY),
-    }));
+    setTransform((prev) => ({...prev, tx: d.ox + (event.clientX - d.sx), ty: d.oy + (event.clientY - d.sy)}));
   }, []);
 
-  const endDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (dragRef.current?.pointerId === event.pointerId) {
-      dragRef.current = null;
+  const onPointerUp = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (drag.current?.pointerId === event.pointerId) {
+      drag.current = null;
     }
   }, []);
 
+  const onWheel = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      if (!viewport || !vbRef.current) {
+        return;
+      }
+      event.preventDefault();
+      setTransform((prev) => ({
+        ...prev,
+        z: clamp(prev.z * Math.exp(-event.deltaY * 0.0016), MIN_ZOOM, MAX_ZOOM),
+      }));
+    },
+    [viewport],
+  );
+
+  const reset = useCallback(
+    () => setTransform({z: 1, tx: 0, ty: 0}),
+    [],
+  );
+
+  // Compute fitted box size.
+  let box: {w: number; h: number} | null = null;
+  if (viewport && vbRef.current) {
+    const [, , vw, vh] = vbRef.current;
+    const base = Math.min(viewport.x / vw, viewport.y / vh);
+    const displayBase = base * transform.z;
+    box = {w: vw * displayBase, h: vh * displayBase};
+  }
+
+  const touchActionNone = {touchAction: 'none' as const};
+
   return (
-    <div className={styles.backdrop} onWheel={onWheel}>
+    <div
+      className={styles.backdrop}
+      ref={viewportRef}
+      onWheel={onWheel}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}>
       <button
         type="button"
         className={styles.closeButton}
@@ -183,48 +257,50 @@ function Overlay({
         <button
           type="button"
           className={styles.toolButton}
-          onClick={() => setTransform((p) => ({...p, zoom: clamp((p.zoom + 0.25) * 1.2, MIN_ZOOM, MAX_ZOOM)}))}>
+          aria-label="Zoom in"
+          onClick={() => setTransform((p) => ({...p, z: clamp(p.z * 1.25, MIN_ZOOM, MAX_ZOOM)}))}>
           +
         </button>
         <button
           type="button"
           className={styles.toolButton}
-          onClick={() => setTransform((p) => ({...p, zoom: clamp(p.zoom / 1.2, MIN_ZOOM, MAX_ZOOM)}))}>
+          aria-label="Zoom out"
+          onClick={() => setTransform((p) => ({...p, z: clamp(p.z / 1.25, MIN_ZOOM, MAX_ZOOM)}))}>
           −
         </button>
-        <button
-          type="button"
-          className={styles.toolButton}
-          onClick={() => setTransform({x: 0, y: 0, zoom: 1})}>
+        <button type="button" className={styles.toolButton} onClick={reset}>
           Reset
         </button>
       </div>
-      <div className={styles.viewport} ref={viewRef}>
-        <div
-          ref={stageRef}
-          className={styles.stage}
-          role="application"
-          aria-label="Pan and zoom the diagram. Drag to pan, scroll to zoom."
-          style={{
-            transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.zoom})`,
-          }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}>
-          <MermaidSvg renderResult={renderResult} containerClassName={styles.large} />
+      <div className={styles.hint}>Scroll to zoom · drag to pan</div>
+      {renderResult === null ? (
+        <div className={styles.loading} style={touchActionNone}>
+          Rendering…
         </div>
-      </div>
+      ) : (
+        <div className={styles.stage} style={touchActionNone}>
+          <div
+            ref={svgWrapRef}
+            className={styles.transform}
+            style={
+              box
+                ? {
+                    width: box.w,
+                    height: box.h,
+                    transform: `translate(-50%, -50%) translate(${transform.tx}px, ${transform.ty}px)`,
+                  }
+                : undefined
+            }>
+            <MermaidSvg svg={renderResult.svg} bindFunctions={renderResult.bindFunctions} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function MermaidRenderer({value}: Props): ReactNode {
-  const renderResult = useMermaidRenderResult({text: value});
-  if (renderResult === null) {
-    return null;
-  }
-  return <ExpandableDiagram renderResult={renderResult} />;
+  return <ExpandableDiagram value={value} />;
 }
 
 export default function Mermaid(props: Props): ReactNode {
