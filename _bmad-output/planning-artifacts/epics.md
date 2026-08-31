@@ -4,6 +4,8 @@ inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-app-ovsingen-2026-08-29/prd.md
   - _bmad-output/planning-artifacts/prds/prd-app-ovsingen-2026-08-29/addendum.md
   - _bmad-output/planning-artifacts/architecture/architecture-app-ovsingen-2026-08-30/ARCHITECTURE-SPINE.md
+  - _bmad-output/planning-artifacts/ux-designs/ux-app-ovsingen-2026-08-30/DESIGN.md
+  - _bmad-output/planning-artifacts/ux-designs/ux-app-ovsingen-2026-08-30/EXPERIENCE.md
 ---
 
 # THW OV Singen App - Epic Breakdown
@@ -99,15 +101,81 @@ NFR-PL2: Form Factor — responsive web app for mobile, tablet, desktop; no nati
 
 ### UX Design Requirements
 
-UX-DR: No separate UX design contract exists. UX guidance comes from the PRD (mobile-first responsive web, NFR-P2/PL2; UJ-1..UJ-4; traffic-light status dashboard) and architecture (SPA with server-side gating, admin existence hidden from non-admins). Story-level UX details (router, component library, styling) are deferred to the frontend story within Epic 1 (structural seed).
+UX-DR1: Design token foundation — implement the full color system from DESIGN.md tokens (brand: THW-blau `#003399`, navy `#001a66`, navy-deep `#00124d`, orange `#f5821f`, plus dark-mode variants; status traffic-light green `#2e7d32`, orange `#f5821f`, red `#c62828`, OOS `#1c1c1c` and dark variants; surface-base/raised/overlay; ink-primary/secondary/disabled/on-brand/on-orange; border-hairline — each with `-dark` pair) as consumable CSS custom properties/tokens consumed by the SPA.
+UX-DR2: Typography ramp — five roles (display 28/700, title 20/600, body 16/400, meta 13/400, label 14/500, Inter/system-ui, per DESIGN.md.typography) implemented as reusable tokens; all support dynamic scaling and 200% zoom without layout breakage; German compound nouns must not truncate or clip.
+UX-DR3: Spacing / rounded / elevation scales — 4-base spacing scale (4..48px, gutter 16px, margin-mobile 16px), rounded scale (sm 4 / md 8 / lg 12 / xl 16 / full 9999), and tonal elevation (no shadows by default; soft shadow only on modal/confirmation overlay `0 4px 12px`) applied consistently; inspection checklist always single-column.
+UX-DR4: Light + dark mode token pairs ship in V1 — every DESIGN.md color/component token has a `-dark` counterpart; theme toggles per DESIGN.md; user can select and system persists it.
+UX-DR5: Reusable UI component library — implement as reusable, testable components (per DESIGN.md.Components): (1) Button-primary (THW-blau fill, white text), (2) Button-danger (status-red, white text, irreducible/high-stakes actions only), (3) Status chip (green/orange/red/OOS pills, distinct token per color), (4) Pass/Fail chip (large ≥48px tappable, green OK/BESTANDEN vs red FEHLER/NICHT BESTANDEN), (5) Input field (underline style, floating label, blue focus / red error underline), (6) Filter chip (pill, active THW-blau fill, one-tap, multi-active), (7) Summary count (display number in colored block, tap activates filter), (8) Card (surface-raised, no shadow) and (9) Toggle (BESTANDEN/NICHT BESTANDEN binary).
+UX-DR6: Comprehensive states — implement cold-open (cached + background refresh), empty (`Keine Werkzeuge vorhanden`; `Keine ausstehenden Anträge`), loading (skeleton, no spinner-over-content), submitting (button disabled + action verb, no double-submit), lockout (HTTP 429 `Zu viele Fehlversuche — 30/60 Sekunden warten`), offline/network (inspection data queues locally, retries on reconnect), inline form validation errors (red underline + inline text, never toast-only), 403 (redirect to Dashboard + `Zugriff verweigert`), and post-submit inline confirmation with auto-return to refreshed Dashboard (~2s).
+UX-DR7: Interaction primitives — fewest-taps inspection (single-screen checklist, `Alle bestanden` shortcut, one submit), one-submit-one-confirmation (no chained modals), auto-return to Dashboard post-inspection, PDF export current-filtered-view, anti-enumeration on all auth flows (registration, password reset, account recovery — uniform response, never reveal email existence), irreversible DSGVO deletion (typed name + mandatory Begründung + `Endgültig löschen`), dual-admin recovery (second-admin approval with Begründung + checkbox), qualification-gated inspection start (disabled `Prüfung starten` with explanation when qualification absent), one-tap status filter chips.
+UX-DR8: German microcopy / Voice & Tone standard — implement German precision microcopy: name-the-entity confirmations/errors (`Kettensäge SG-01 → GRÜN — Nächste Prüfung: +12 Monate`; `NICHT BESTANDEN — Anlasser defekt`; `⛔ Wird als Außer Betrieb gesperrt`; `→ Sofort kein Login`; `Login erst möglich nach Admin-Freigabe`; `Endgültig löschen — Unumkehrbar · Audit-Pflicht`); never vague (`Gespeichert` alone, `E-Mail nicht gefunden`, generic `Fehler aufgetreten`). UI language German; docs English.
+UX-DR9: Accessibility floor (regulated) — WCAG AA contrast on all text/chips/controls (incl. traffic-light colors on light and dark), interactive touch targets ≥48px (pass/fail chips may be larger), focus traversal follows reading order, no focus traps except modals (DSGVO/lockout, return focus on close), screen-reader announcements for status changes/form errors/post-submission, no icon-only buttons, keyboard-operable CTAs/filter chips/toggles/fields, Reduce Motion skips auto-return animation.
+UX-DR10: Responsive & platform — mobile-first responsive web (NFR-P2/PL2): breakpoints sm 640 / md 768 / lg 1024; mobile single-column, dashboard 2×2 summary grid, admin nav collapses to hamburger/bottom; tablet two-column dashboard + persistent admin sidebar; desktop full sidebar; inspection checklist always single-column at all widths (safety-critical input never split); one codebase, touch-first + desktop; UI language German. 10 wireframes in `ux-app-ovsingen-2026-08-30/wireframes/` are the composition references.
 
 ### FR Coverage Map
 
-{{requirements_coverage_map}}
+FR-1: Epic 1 - Email-based authentication (login session token / HTTP 401)
+FR-2: Epic 1 - Password policy (min 10 chars, clear validation)
+FR-3: Epic 1 - Progressive login lockout (3→30s / 4→60s HTTP 429)
+FR-4: Epic 1 - Optional TOTP MFA (6-digit code after password)
+FR-5: Epic 1 (self-registration → pending_approval) / Epic 2 (admin approval) - Self-Registration and Admin Approval
+FR-6: Epic 2 - Group & permission management (permission groups, resolved active permission set)
+FR-7: Epic 1 - Flexible user attributes (JSON metadata on profiles)
+FR-8: Epic 4 - Tool type management (name, default schedule, qualification, inspection mode)
+FR-9: Epic 4 - Tool management (per-tool schedule override, bulk CSV import with per-row error report)
+FR-10: Epic 4 - Flexible attributes on tools & tool types (JSON metadata)
+FR-11: Epic 5 - Qualification-gated inspection (access error if no required qualification)
+FR-12: Epic 5 - Checklist inspection (all items answered, pass/fail per item persisted)
+FR-13: Epic 5 - Pass/Fail inspection (toggle + optional notes)
+FR-14: Epic 5 - Out of Service flagging (failed item/result → OOS immediately, failure record)
+FR-15: Epic 5 - OOS reinstatement (Fuehrung/Admin only, mandatory reason, clock reset)
+FR-16: Epic 6 - Color-coded status dashboard (Red/Orange/Green, filterable)
+FR-17: Epic 6 - Status report export PDF (Fuehrung/Admin, current filtered view)
+FR-18: Epic 6 - Inspection history (reverse-chronological per tool)
+FR-19: Epic 2 - Admin module access isolation (HTTP 403, hidden existence)
+FR-20: Epic 2 - User approval workflow (approve → active, reject → remove pending)
+FR-21: Epic 2 - User & group administration (create/edit/deactivate, revoke inherited permissions)
+FR-22: Epic 2 - Qualification management (create/assign/revoke, immediate effect)
+FR-23: Epic 4 - Tool & tool type configuration (checklist items, CSV import, historical records unchanged)
+FR-24: Epic 3 - DSGVO compliance operations (data-access report, account deletion, anonymized history)
+FR-25: Epic 1 - Change own password (revokes other sessions, audited)
+FR-26: Epic 1 - Self-service password reset (single-use 30-min link, anti-enumeration)
+FR-27: Epic 1 - Admin credential recovery (dual-control, high-severity audit, last-admin out-of-band)
+FR-28: Epic 3 - SMTP configuration (admin interface, encrypted/masked secrets, test email)
+FR-29: Epic 3 - Backup destination configuration (admin interface, encrypted credentials, test connection)
+FR-30: Epic 4 - Schedule catalog management (named schedules, FK references, archiving preserves history)
 
 ## Epic List
 
-{{epics_list}}
+### Epic 1: Account & Authentication
+Users can register, authenticate, and manage their own identity securely. A volunteer self-registers for a `pending_approval` account, logs in with email + password (with optional TOTP MFA and progressive lockout), manages their profile, changes their own password (revoking other sessions), and recovers a forgotten password via a secure email link. Seeded admin accounts are protected by dual-admin credential recovery.
+**FRs covered:** FR-1, FR-2, FR-3, FR-4, FR-5 (self-registration), FR-7, FR-25, FR-26, FR-27
+**Implementation notes:** Greenfield structural seed (Epic 1 Story 1) scaffolds `cmd/server`, `internal/{user,tools,admin,platform}`, `web/` React+Vite+TS SPA, migrations, deploy, infra, justfile. User module owns identity/auth/permissions/qualifications (AD-2, AD-3, AD-13). Password reset (FR-26) depends on working email delivery; full admin SMTP panel (FR-28) ships in Epic 3 — Epic 1 uses a baseline sender. UX: UX-DR4/5/6/7/8/9 (auth surfaces, MFA, lockout, anti-enumeration microcopy, accessibility).
+
+### Epic 2: Permissions, Roles & Administration Foundation
+Administrators manage who belongs and what they are allowed to do. Admins approve pending self-registered volunteers, create/edit/deactivate users, manage user groups and roles, assign qualifications, and maintain the additive action-matched permission model. The admin module is isolated and returned HTTP 403 (with hidden existence) for non-admins.
+**FRs covered:** FR-5 (admin approval), FR-6, FR-19, FR-20, FR-21, FR-22
+**Implementation notes:** User module owns identity/permissions/qualifications (AD-2); additive permission model with base roles helfende/schirrmeister/fuehrende/admin and 21 permission codes (AD-12); server-side authorization is the only source of truth, admin existence hidden in SPA (AD-6). Every later epic's permission gating depends on this. UX: UX-DR5/6/7/8/9 (admin approve/reject surface, user/role/qualification management, 403 handling, German microcopy).
+
+### Epic 3: System Configuration & Compliance
+Administrators configure operational infrastructure and satisfy legal compliance. Admins manage SMTP email settings (test email, encrypted/masked secrets) and backup destinations (test connection, encrypted credentials); handle DSGVO operations including data-access reports and irreversible account deletion with anonymized inspection history.
+**FRs covered:** FR-24, FR-28, FR-29
+**Implementation notes:** Admin module owns exactly 3 config tables — `smtp_settings`, `backup_destinations`, `schedules` (AD-11, AD-14, AD-15); secrets encrypted at rest and write-only/masked (NFR-S4, FR-28/FR-29); DSGVO deletion runs in one transaction with immutable audit entries (AD-8, NFR-O2, FR-24). Placed before catalogue/inspection so operational email/backup and compliance are in place early. UX: UX-DR5/6/7/8/9 (DSGVO heavy two-step delete, settings forms, test actions).
+
+### Epic 4: Equipment Catalogue & Scheduling
+The Schirrmeister administers the equipment universe. Admins/Schirrmeister define tool types (name, default schedule, required qualification, checklist vs pass/fail mode), individual tools (optional per-tool schedule override), flexible attributes, the named schedule catalog, and bulk CSV import with per-row error reporting.
+**FRs covered:** FR-8, FR-9, FR-10, FR-23, FR-30
+**Implementation notes:** Tool module owns tool config write path (AD-10); schedule catalog owned by Admin (AD-16); per-tool schedule is a first-class FK (FR-9/AD-10); CSV import (FR-9/FR-23) with per-row error table. Gated by Epic 2 permissions (tools.manage, tool_types.manage, schedules.manage). UX: UX-DR5/6/7/8/9/10 (catalogue tabs, type editor, CSV result screen, responsive).
+
+### Epic 5: Inspection Execution & Serviceability
+Volunteers perform safety-critical inspections and manage availability. Qualified Helfer*in/Fuehrung run checklist-mode or pass/fail-mode inspections; a failed item flips the tool to Out of Service immediately with a full failure record; Fuehrung/Admin reinstate a tool with a mandatory reason, resetting the inspection clock.
+**FRs covered:** FR-11, FR-12, FR-13, FR-14, FR-15
+**Implementation notes:** Tool module owns inspection + OOS derivation (AD-4, AD-5, AD-7, AD-9); status always derived on read, never stored; qualification-gated start (FR-11/AD-7); OOS reinstate Fuehrung/Admin only with clock reset (FR-15/AD-9). UX: UX-DR5/6/7/8/9/10 (single-screen checklist, pass/fail toggle, defect capture, OOS, post-submit auto-return).
+
+### Epic 6: Dashboard, Reporting & History
+Users see the current operational truth, and leadership reviews and exports it. All authenticated users view a color-coded status dashboard (Red/Orange/Green, derived) filterable by status; Fuehrung/Admin export the current filtered view as PDF and inspect full per-tool inspection history.
+**FRs covered:** FR-16, FR-17, FR-18
+**Implementation notes:** Status derived on read via single shared clock (AD-4, AD-5); PDF export reflects active filters (FR-17); history reverse-chronological with per-initiation details (FR-18); gated by dashboard.view, report.export, inspection.history.view. UX: UX-DR5/6/7/8/9/10 (dashboard summary counts + filter chips, PDF export current view, history).
 
 <!-- Repeat for each epic in epics_list (N = 1, 2, 3...) -->
 
