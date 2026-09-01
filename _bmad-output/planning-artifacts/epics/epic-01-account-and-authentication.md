@@ -22,9 +22,10 @@ So that every subsequent story builds on a real, runnable application with a val
 
 **Given** the database requirements (PostgreSQL 18, single shared migration set per AD-3/AD-11, NFR-R2),
 **When** the local stack is started via the Compose definition (Docker or Podman),
-**Then** `just db-up` provisions a PostgreSQL 18 container and `golang-migrate` applies all migrations in `migrations/`
+**Then** `just db-up` provisions a PostgreSQL 18 container and `golang-migrate` applies the migrations present in `migrations/`
+**And** the migration infrastructure is in place so each later story adds its own incremental migration for exactly the tables it needs (AD-11: one migration set, each table owned by one module) — the finished set creates all tables in a single fresh `just db-up`
 **And** a connection pool (pgx) is established at `cmd/server` and exposed to the module repositories through their adapter ports
-**And** the cold-start migration seeds the four base roles (`helfende`, `schirrmeister`, `fuehrende`, `admin`), the two pre-seeded admin accounts (credentials delivered out-of-band, never in VCS, per FR-27/AD-13), and the `admin.recovery.approve` permission (AD-12/AD-13).
+**And** the cold-start migration creates only the base tables required for the seeder (identity + `admin.recovery.approve` permission) and seeds the four base roles (`helfende`, `schirrmeister`, `fuehrende`, `admin`) and the two pre-seeded admin accounts (credentials delivered out-of-band, never in VCS, per FR-27/AD-13) (AD-12/AD-13).
 
 **Given** the JSON error contract (Architecture error shape),
 **When** any handler returns an error,

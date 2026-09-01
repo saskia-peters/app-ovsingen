@@ -1,5 +1,5 @@
 ---
-stepsCompleted: ["validate-prerequisites", "design-epics", "create-stories"]
+stepsCompleted: ["validate-prerequisites", "design-epics", "create-stories", "final-validation"]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-app-ovsingen-2026-08-29/prd.md
   - _bmad-output/planning-artifacts/prds/prd-app-ovsingen-2026-08-29/addendum.md
@@ -94,6 +94,7 @@ NFR-PL2: Form Factor — responsive web app for mobile, tablet, desktop; no nati
 - Stack: Go 1.27, chi v5.3.2 (>=v5.2.4 to avoid GO-2026-4316 open-redirect), sqlc v1.31.1, pgx v5, golang-migrate v4.19.1, PostgreSQL 18, TypeScript 6.x, React 19, Vite 8.x, Docker/podman-compose (single Compose source), just (single command runner), OpenTofu v1.12.6 Google provider 5.x (Cloud Run, Artifact Registry, Cloud SQL; min_instance_count=0), Docusaurus docs.
 - Structural seed: `cmd/server/` composition root; `internal/{user,tools,admin,platform}/`; `web/` React+Vite+TS SPA (no business logic); `migrations/`; `deploy/` compose + backup; `infra/` OpenTofu; root `justfile`; `docs/`.
 - Database: single migration set, 22 tables (1-11, 19 owned by User; 12-18 by Tool; 20-22 by Admin); UUID v7 PKs; UTC RFC 3339 timestamps; uniform JSON error envelope `{"error":{"code","message","details?"}}`.
+- Database tables: NOT created upfront in the scaffold — each story adds its own incremental migration (AD-11) for exactly the tables it needs; the completed single migration set builds the full schema (all 22 tables) in one `just db-up` run on a fresh setup.
 - Base permission series (21 codes): `dashboard.view`, `inspection.submit`, `inspection.history.view`, `report.export`, `tool.reinstate`, `tools.manage`, `tool_types.manage`, `users.view`, `users.approve`, `users.manage`, `user_groups.manage`, `roles.create`, `roles.edit`, `roles.assign`, `qualifications.manage`, `dsgvo.access_report`, `dsgvo.delete`, `admin.recovery.approve`, `admin.settings.email`, `admin.settings.backup`, `schedules.manage`.
 - Base role matrix (additive): `helfende` = dashboard.view, inspection.submit; `schirrmeister` = + tools.manage, tool_types.manage, inspection.history.view; `fuehrende` = + inspection.history.view, report.export, tool.reinstate; `admin` = all 21 codes.
 - Deferred to build epics (not blocking stories): frontend framework internals (router/state/component library) chosen in frontend epic; operational envelope/deploy topology details and CI/CD pipeline provider+workflow files in deploy epic; concrete TOTP and SMTP libraries in User epic; composite schedule engine (weekday/time) deferred to future enhancement (schema fields exist).
@@ -182,5 +183,3 @@ Volunteers perform safety-critical inspections and manage availability. Qualifie
 Users see the current operational truth, and leadership reviews and exports it. All authenticated users view a color-coded status dashboard (Red/Orange/Green, derived) filterable by status; Fuehrung/Admin export the current filtered view as PDF and inspect full per-tool inspection history.
 **FRs covered:** FR-16, FR-17, FR-18
 **Implementation notes:** Status derived on read via single shared clock (AD-4, AD-5); PDF export reflects active filters (FR-17); history reverse-chronological with per-initiation details (FR-18); gated by dashboard.view, report.export, inspection.history.view. UX: UX-DR5/6/7/8/9/10 (dashboard summary counts + filter chips, PDF export current view, history).
-
-<!-- Epics and stories are appended below in order. -->

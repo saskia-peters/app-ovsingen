@@ -48,52 +48,7 @@ So that I can inspect any tool confidently with fewest taps.
 **When** it is built,
 **Then** it meets the accessibility floor (≥48px targets, keyboard-operable, SR announcements, no icon-only buttons, Reduce Motion skips auto-return animation) (UX-DR9).
 
-### Story 5.3: Pass/Fail Inspection Execution
-
-As a qualified volunteer,
-I want to perform a pass/fail inspection on a tool,
-So that I can record whether it is serviceable in one tap.
-
-**Acceptance Criteria:**
-
-**Given** a tool whose tool type is pass/fail mode,
-**When** I start an inspection (per Story 5.1),
-**Then** the screen presents a single pass/fail toggle (`BESTANDEN` / `NICHT BESTANDEN`) with an optional notes field (FR-13/UX-DR5).
-
-**Given** I set a result,
-**When** I submit,
-**Then** the inspection is recorded with my identity, timestamp, the pass/fail result, and optional notes (FR-13/AD-4, NFR-O1).
-
-**Given** I set `NICHT BESTANDEN`,
-**When** I submit,
-**Then** the tool transitions to Out of Service immediately per Story 5.5 (FR-13/FR-14/AD-4) and the confirmation names the consequence (UX-DR8).
-
-### Story 5.4: Checklist Inspection Execution
-
-As a qualified volunteer,
-I want to perform a checklist inspection on a tool,
-So that I can verify every configured checklist item before submitting.
-
-**Acceptance Criteria:**
-
-**Given** a tool whose tool type is checklist mode,
-**When** I start an inspection (per Story 5.1),
-**Then** the screen presents all configured checklist items from the tool type's checklist, each with a large per-item pass/fail chip (FR-12/UX-DR5)
-**And** an "Alle bestanden" shortcut is available (UX-DR7).
-
-**Given** any checklist item is unanswered,
-**When** I try to submit,
-**Then** submission is blocked until all items are answered (every item required) (FR-12).
-
-**Given** I answer all items,
-**When** I submit,
-**Then** the inspection record persists each per-item pass/fail result together with the overall result and my identity/timestamp (FR-12/FR-18/NFR-O1).
-
-**Given** at least one item failed,
-**When** I submit,
-**Then** the tool transitions to Out of Service immediately per Story 5.5 (FR-12/FR-14/AD-4) and the confirmation names the consequence (UX-DR8).
-
-### Story 5.5: Out of Service Flagging
+### Story 5.3: Out of Service Flagging
 
 As the system,
 I want any failed inspection to transition a tool to Out of Service immediately,
@@ -117,6 +72,51 @@ So that an unsafe tool is never shown as serviceable.
 **Given** the OOS confirmation,
 **When** I submit a failing inspection,
 **Then** the inline confirmation names the consequence (e.g. "⛔ Wird als Außer Betrieb gesperrt") (UX-DR6/UX-DR8).
+
+### Story 5.4: Pass/Fail Inspection Execution
+
+As a qualified volunteer,
+I want to perform a pass/fail inspection on a tool,
+So that I can record whether it is serviceable in one tap.
+
+**Acceptance Criteria:**
+
+**Given** a tool whose tool type is pass/fail mode,
+**When** I start an inspection (per Story 5.1),
+**Then** the screen presents a single pass/fail toggle (`BESTANDEN` / `NICHT BESTANDEN`) with an optional notes field (FR-13/UX-DR5).
+
+**Given** I set a result,
+**When** I submit,
+**Then** the inspection is recorded with my identity, timestamp, the pass/fail result, and optional notes (FR-13/AD-4, NFR-O1).
+
+**Given** I set `NICHT BESTANDEN`,
+**When** I submit,
+**Then** the tool transitions to Out of Service immediately per Story 5.3 (FR-13/FR-14/AD-4) and the confirmation names the consequence (UX-DR8).
+
+### Story 5.5: Checklist Inspection Execution
+
+As a qualified volunteer,
+I want to perform a checklist inspection on a tool,
+So that I can verify every configured checklist item before submitting.
+
+**Acceptance Criteria:**
+
+**Given** a tool whose tool type is checklist mode,
+**When** I start an inspection (per Story 5.1),
+**Then** the screen presents all configured checklist items from the tool type's checklist, each with a large per-item pass/fail chip (FR-12/UX-DR5)
+**And** an "Alle bestanden" shortcut is available (UX-DR7).
+
+**Given** any checklist item is unanswered,
+**When** I try to submit,
+**Then** submission is blocked until all items are answered (every item required) (FR-12).
+
+**Given** I answer all items,
+**When** I submit,
+**Then** the inspection record persists each per-item pass/fail result together with the overall result and my identity/timestamp (FR-12/FR-18/NFR-O1).
+
+**Given** at least one item failed,
+**When** I submit,
+**Then** the tool transitions to Out of Service immediately per Story 5.3 (FR-12/FR-14/AD-4) and the confirmation names the consequence (UX-DR8).
 
 ### Story 5.6: Out of Service Reinstatement
 
