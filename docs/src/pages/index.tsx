@@ -31,7 +31,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={`${siteConfig.title}`}
-      description="THW OV Singen App documentation — planning, architecture, and API contracts.">
+      description="G.E.A.R. documentation — planning, architecture, and API contracts.">
       <HomepageHeader />
       <main>
         <div className="container">

@@ -1,5 +1,5 @@
 ---
-name: THW OV Singen App
+name: G.E.A.R.
 status: final
 sources:
   - _bmad-output/planning-artifacts/prds/prd-app-ovsingen-2026-08-29/prd.md
@@ -11,11 +11,11 @@ sources:
 updated: '2026-08-31'
 ---
 
-# THW OV Singen App — Experience Spine
+# G.E.A.R. — Experience Spine
 
 ## Foundation
 
-A responsive, mobile-first web application. No UI system named — custom-built with THW brand tokens (see `DESIGN.md`). Three self-contained modules: Öffentlich/Auth (public and authentication), Geräte/Protokoll (device inspection), Admin-Modul (protected admin; 403 for non-admins). UI language is German for all labels, errors, and microcopy; documentation remains English.
+A responsive, mobile-first web application. No UI system named — custom-built with brand tokens (see `DESIGN.md`). Three self-contained modules: Öffentlich/Auth (public and authentication), Geräte/Protokoll (device inspection), Admin-Modul (protected admin; 403 for non-admins). UI language is German for all labels, errors, and microcopy; documentation remains English.
 
 Light and dark mode ship in V1. The app targets volunteers spanning a wide age range, working in warehouse and field conditions — accessibility is a regulatory floor, not an aspiration. WCAG AA contrast, large touch targets, high-contrast status colors.
 
@@ -109,12 +109,12 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 
 | Component | Use | Behavioral rules |
 |---|---|---|
-| Button (primary) | Every surface CTA | One primary CTA per surface. THW-Blau fill. Label is the action verb (e.g., "Anmelden," "Prüfung speichern," "Registrieren"). |
+| Button (primary) | Every surface CTA | One primary CTA per surface. GEAR-Blau fill. Label is the action verb (e.g., "Anmelden," "Prüfung speichern," "Registrieren"). |
 | Button (danger) | Irreversible actions only | DSGVO deletion, defect lockout. Red fill. Never used for routine confirmation. Requires typed confirmation or mandatory reason before enabling. |
 | Status chip | Dashboard counts, inline status | Read-only. Green/orange/red/OOS. Pill-shaped. One chip per status value; no mixing. |
 | Pass/Fail chip | Inspection checklist, pass/fail toggle | Large tappable target (≥48px). Green = OK/BESTANDEN, red = FEHLER/NICHT BESTANDEN. "Alle bestanden" shortcut submits all-pass without individual taps. |
 | Input field | Forms (login, registration, defect, password) | Underlined style. Focused: blue underline. Error: red underline + red error text. Labels are always visible, never placeholder-only. |
-| Filter chip | Dashboard status filters | One-tap filter. Active state fills with THW-Blau. Multiple chips can be active simultaneously. Clears on second tap. |
+| Filter chip | Dashboard status filters | One-tap filter. Active state fills with GEAR-Blau. Multiple chips can be active simultaneously. Clears on second tap. |
 | Summary count | Dashboard top section | Four instances: one per status color. Display-size number inside colored block. Tapping a count activates the corresponding filter. |
 | Card | Tool rows, admin list items, panels | Tonal elevation only (no shadow). Tap opens detail. No hover animation on mobile; subtle outline on desktop focus. |
 | Toggle | BESTANDEN / NICHT BESTANDEN (pass/fail tools) | Green-left = BESTANDEN, red-right = NICHT BESTANDEN. Neutral = `{colors.ink-disabled}`. One toggle per tool; position is binary. |
@@ -219,7 +219,7 @@ Failure/empty: CSV is empty or malformed → "Datei enthält keine gültigen Dat
 
 ## Responsive & Platform
 
-The THW OV Singen App is a responsive web application, mobile-first. Phone-frame wireframes represent the narrowest viewport (≈375px). The same surfaces scale to tablet and desktop.
+The G.E.A.R. is a responsive web application, mobile-first. Phone-frame wireframes represent the narrowest viewport (≈375px). The same surfaces scale to tablet and desktop.
 
 - **Mobile (≤640px):** Single-column. Dashboard summary counts stack or flow in a 2×2 grid. Tool list full-width. Admin nav collapses to hamburger or bottom navigation. Inspection checklist is single-column, one-screen.
 - **Tablet (640–1024px):** Dashboard may show the tool list alongside summary counts in a two-column layout. Admin surfaces gain a persistent sidebar. Inspection checklist remains single-column.

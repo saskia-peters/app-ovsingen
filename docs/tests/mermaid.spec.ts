@@ -9,7 +9,7 @@ test('mermaid diagram expands to an interactive, responsive overlay', async ({pa
   });
   page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
 
-  await page.goto('/app-ovsingen/docs/planning/architecture-spine');
+  await page.goto('/gear/docs/planning/architecture-spine');
 
   // Mermaid renders client-side: wait for the first diagram to appear.
   const container = page.locator('.docusaurus-mermaid-container').first();

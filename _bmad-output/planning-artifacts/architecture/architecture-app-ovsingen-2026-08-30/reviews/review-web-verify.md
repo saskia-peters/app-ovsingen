@@ -1,4 +1,4 @@
-# Web-Verification Review — Architecture Spine (THW OV Singen App V1)
+# Web-Verification Review — Architecture Spine (G.E.A.R. V1)
 
 **Reviewer role:** skeptical architecture reviewer — verify committed decisions were reality-checked, not asserted from training data.
 **Reviewed artifact:** `ARCHITECTURE-SPINE.md` (created 2026-08-30), focus on **Stack (Seed)** table (lines 100–117), the GO-2026-4316 security note (line 117), Stack-relevant ADs (AD-1, AD-3), and the "Modules" consistency convention (line 98).

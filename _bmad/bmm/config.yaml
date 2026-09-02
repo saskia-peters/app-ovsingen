@@ -10,7 +10,7 @@ project_knowledge: "{project-root}/docs"
 
 # Core Configuration Values
 user_name: Saskia
-project_name: app-ovsingen
+project_name: gear
 communication_language: English
 document_output_language: English
 output_folder: _bmad-output

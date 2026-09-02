@@ -2,9 +2,9 @@
 sidebar_position: 1
 ---
 
-# THW OV Singen App — Documentation
+# G.E.A.R. — Documentation
 
-The **THW OV Singen App** modernizes and centralizes the operational equipment management of the THW Ortsverband Singen: a modularized web application for mobile and desktop devices.
+The **G.E.A.R.** modernizes and centralizes the operational equipment management of the Ortsverband Singen: a modularized web application for mobile and desktop devices.
 
 This documentation site is generated from the BMad planning artifacts (PRD, product brief, architecture spine) and will grow with the project: API contracts and module integration points are published here per NFR-M4.
 
@@ -14,7 +14,7 @@ A plain-language overview of the app for decision-makers and new team members.
 
 ## Planning documents
 
-- [PRD — THW OV Singen App](/docs/planning/prd) — functional requirements, epics, and non-functional guidelines
+- [PRD — G.E.A.R.](/docs/planning/prd) — functional requirements, epics, and non-functional guidelines
 - [Product Brief](/docs/planning/product-brief) — scope, objectives, and high-level requirements
 - [Architecture Spine](/docs/planning/architecture-spine) — technical invariants, ADs, database artifacts, diagrams
 - [Architecture Addendum](/docs/planning/addendum) — technology stack decisions and deferred options

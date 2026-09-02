@@ -1,4 +1,4 @@
-# THW OV Singen App - single command interface (casey/just)
+# GEAR - single command interface (casey/just)
 # Docs site lives in ./docs (Docusaurus). Recipes below are the docs lifecycle.
 
 set shell := ["bash", "-cu"]

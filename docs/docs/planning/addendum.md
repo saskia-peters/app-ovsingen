@@ -1,4 +1,4 @@
-# Addendum: THW OV Singen App
+# Addendum: G.E.A.R.
 
 *This document preserves technical decisions, options considered, and implementation context that informs downstream work (architecture, solution design) but does not belong in the PRD itself.*
 

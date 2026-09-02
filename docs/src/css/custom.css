@@ -1,14 +1,14 @@
 /**
- * THW OV Singen App — Docusaurus theme.
- * Brand: THW-Blau (RAL 5002 Ultramarine / Pantone 286) ≈ #003399.
+ * GEAR — Docusaurus theme.
+ * Brand: GEAR-Blau (RAL 5002 Ultramarine / Pantone 286) ≈ #003399.
  * Status colors (Green/Orange/Red) match the app's dashboard semantics.
  */
 
 :root {
-  --thw-blue: #003399;
-  --thw-navy: #001a66;
-  --thw-navy-deep: #00124d;
-  --thw-orange: #f5821f;
+  --gear-blue: #003399;
+  --gear-navy: #001a66;
+  --gear-navy-deep: #00124d;
+  --gear-orange: #f5821f;
 
   --ifm-color-primary: #003399;
   --ifm-color-primary-dark: #002d88;
@@ -20,15 +20,15 @@
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 51, 153, 0.1);
   --ifm-hero-background-color: #003399;
-  --ifm-footer-background-color: var(--thw-navy-deep);
+  --ifm-footer-background-color: var(--gear-navy-deep);
   --ifm-toc-border-color: #e3e8f0;
 }
 
 /* Lighter blue family so links/buttons stay readable on dark background */
 [data-theme='dark'] {
-  --thw-blue: #7aa2ff;
-  --thw-navy: #2a3f8f;
-  --thw-navy-deep: #0d1b4d;
+  --gear-blue: #7aa2ff;
+  --gear-navy: #2a3f8f;
+  --gear-navy-deep: #0d1b4d;
 
   --ifm-color-primary: #6690f0;
   --ifm-color-primary-dark: #5a80dd;
@@ -42,7 +42,7 @@
 }
 
 .navbar {
-  background-color: var(--thw-navy);
+  background-color: var(--gear-navy);
 }
 
 .navbar__title,

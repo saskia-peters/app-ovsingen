@@ -4,13 +4,13 @@ Users can register, authenticate, and manage their own identity securely. A volu
 
 ### Story 1.1: Project Scaffold & Database Foundation
 
-As a developer on the THW OV Singen App team,
+As a developer on the G.E.A.R. team,
 I want a cold-start repository scaffold with a wired PostgreSQL data layer and a single-command runnable stack,
 So that every subsequent story builds on a real, runnable application with a valid database.
 
 **Acceptance Criteria:**
 
-**Given** an empty repository on the `app-ovsingen` project,
+**Given** an empty repository on the `gear` project,
 **When** the scaffold is created per the architecture Structural Seed,
 **Then** the repository contains `cmd/server/`, `internal/{user,tools,admin,platform}/`, `web/`, `migrations/`, `deploy/`, `infra/`, `docs/`, and a root `justfile`, each with a documented purpose
 **And** `cmd/server` is the composition root wiring the module hexagons and adapters (no business logic in adapters/handlers/repositories, per AD-1).

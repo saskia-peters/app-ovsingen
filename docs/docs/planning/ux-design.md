@@ -1,9 +1,9 @@
 ---
-name: THW OV Singen App V1
+name: G.E.A.R. V1
 type: ux-design
 purpose: design-and-experience
 altitude: feature
-scope: THW OV Singen App V1 ecosystem — visual identity, information architecture, interaction & accessibility
+scope: G.E.A.R. V1 ecosystem — visual identity, information architecture, interaction & accessibility
 status: final
 created: '2026-08-30'
 updated: '2026-08-31'
@@ -12,14 +12,14 @@ sources: [_bmad-output/planning-artifacts/ux-designs/ux-app-ovsingen-2026-08-30/
 companions: []
 ---
 
-# UX Design — THW OV Singen App V1
+# UX Design — G.E.A.R. V1
 
-An interactive, mobile-first responsive web app for equipment inspection. Corporate THW blue/orange, a status traffic-light, German microcopy, and a WCAG AA accessibility floor. The two governing contracts are `DESIGN.md` (visual identity) and `EXPERIENCE.md` (behavior, IA, accessibility). The wireframes below are the composition references; **the spines win on any conflict with a mockup**.
+An interactive, mobile-first responsive web app for equipment inspection. Corporate G.E.A.R. blue/orange, a status traffic-light, German microcopy, and a WCAG AA accessibility floor. The two governing contracts are `DESIGN.md` (visual identity) and `EXPERIENCE.md` (behavior, IA, accessibility). The wireframes below are the composition references; **the spines win on any conflict with a mockup**.
 
 ## Design Language
 
 - **Personality:** workbench — fast, glanceable, minimal ceremony. Dashboard → act → done.
-- **Brand:** THW-Blau `#003399`, navy `#001a66`/`#00124d`, orange `#f5821f` (mirrors the docs site tokens), light + dark mode in V1.
+- **Brand:** GEAR-Blau `#003399`, navy `#001a66`/`#00124d`, orange `#f5821f` (mirrors the docs site tokens), light + dark mode in V1.
 - **Status traffic-light:** Green `#2e7d32` (safe/in-time), Orange `#f5821f` (due ≤14 days), Red `#c62828` (overdue/failed), OOS `#1c1c1c` (out of service).
 - **Type:** Inter/system-ui ramp — display 28/700, title 20/600, body 16/400, meta 13/400, label 14/500.
 - **Language:** UI in German; docs stay English.

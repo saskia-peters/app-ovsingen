@@ -1,19 +1,19 @@
 ---
-title: THW OV Singen App
+title: G.E.A.R.
 status: draft
 created: 2026-08-29
 updated: 2026-08-29
 ---
 
-# PRD: THW OV Singen App
+# PRD: G.E.A.R.
 
 ## 0. Document Purpose
-This Product Requirement Document (PRD) defines the scope, functional requirements, and non-functional guidelines for the first release (V1) of the **THW OV Singen App**. It is designed for product managers, system architects, software developers, and quality assurance engineers to guide design, implementation, and verification. The document is structured with glossary-anchored terms, globally numbered functional requirements, inline assumptions (indexed in Section 9), and explicit MVP boundaries. This V1 specification builds directly on the initial [Product Brief](file:///home/saskia/devprojects/app-ovsingen/_bmad-output/planning-artifacts/briefs/brief-app-ovsingen-2026-08-29/brief.md).
+This Product Requirement Document (PRD) defines the scope, functional requirements, and non-functional guidelines for the first release (V1) of the **G.E.A.R.** It is designed for product managers, system architects, software developers, and quality assurance engineers to guide design, implementation, and verification. The document is structured with glossary-anchored terms, globally numbered functional requirements, inline assumptions (indexed in Section 9), and explicit MVP boundaries. This V1 specification builds directly on the initial [Product Brief](file:///home/saskia/devprojects/gear/_bmad-output/planning-artifacts/briefs/brief-app-ovsingen-2026-08-29/brief.md).
 
 ## 1. Vision
-In the German Federal Agency for Technical Relief (THW) Ortsverband Singen, the operational readiness of specialized tools and equipment is a matter of life-saving importance. Yet, managing periodic equipment inspections, verifying personnel qualifications (such as chainsaw or generator operation), and tracking tool statuses has historically been manual and fragmented. The **THW OV Singen App** modernizes and centralizes this process, ensuring that every tool in the Ortsverband is inspected on time, by qualified volunteers, with transparent and immediate tracking.
+In the German Federal Agency for Technical Relief (THW) Ortsverband Singen, the operational readiness of specialized tools and equipment is a matter of life-saving importance. Yet, managing periodic equipment inspections, verifying personnel qualifications (such as chainsaw or generator operation), and tracking tool statuses has historically been manual and fragmented. The **G.E.A.R.** modernizes and centralizes this process, ensuring that every tool in the Ortsverband is inspected on time, by qualified volunteers, with transparent and immediate tracking.
 
-Crucially, the tool maintenance module is only the first component of a broader, extensible **THW OV Singen App Ecosystem**. The application's architecture is designed from day one with a strict focus on **modularization** and decoupling. The user management directory, authorization framework, and shared data persistence layers are built as a standalone, reusable foundation. This ensures that future Ortsverband modules (e.g., event scheduling, vehicle logs, or operational reporting) can be seamlessly integrated into the ecosystem without refactoring the core directory.
+Crucially, the tool maintenance module is only the first component of a broader, extensible **G.E.A.R. Ecosystem**. The application's architecture is designed from day one with a strict focus on **modularization** and decoupling. The user management directory, authorization framework, and shared data persistence layers are built as a standalone, reusable foundation. This ensures that future Ortsverband modules (e.g., event scheduling, vehicle logs, or operational reporting) can be seamlessly integrated into the ecosystem without refactoring the core directory.
 
 For volunteers (**Helfer*in**), it offers a simple, mobile-friendly interface to quickly log inspections. For leadership (**Fuehrung**), it provides an immediate dashboard of overall equipment health. For administrators (**Admin**), it serves as a central registry to manage permissions and configure inspection parameters. By enforcing safety standards and qualification checks, the app directly contributes to operational safety while maintaining strict compliance with European data privacy laws (DSGVO) on a robust, future-proof software architecture.
 
@@ -136,7 +136,7 @@ System administrators can store arbitrary, flexible metadata attributes on user 
 
 #### 4.2 Tool Maintenance Module
 **Description:**
-This is the first functional module of the THW OV Singen App Ecosystem. It handles the full lifecycle of equipment inspection within the Ortsverband. Qualified **Helfer\*in** and **Fuehrung** can submit inspections (pass/fail or checklist-based, depending on Tool Type configuration), with the system enforcing qualification gating. Tool statuses are automatically maintained, including Out of Service flagging on failed inspections. **Fuehrung** can additionally view the Status Dashboard, reinstate tools, and export reports. Realizes UJ-1 and UJ-2.
+This is the first functional module of the G.E.A.R. Ecosystem. It handles the full lifecycle of equipment inspection within the Ortsverband. Qualified **Helfer\*in** and **Fuehrung** can submit inspections (pass/fail or checklist-based, depending on Tool Type configuration), with the system enforcing qualification gating. Tool statuses are automatically maintained, including Out of Service flagging on failed inspections. **Fuehrung** can additionally view the Status Dashboard, reinstate tools, and export reports. Realizes UJ-1 and UJ-2.
 
 **Functional Requirements:**
 

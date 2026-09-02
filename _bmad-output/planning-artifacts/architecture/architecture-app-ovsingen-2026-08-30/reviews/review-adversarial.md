@@ -1,5 +1,5 @@
 ---
-title: Adversarial Architecture Review — THW OV Singen App V1
+title: Adversarial Architecture Review — G.E.A.R. V1
 type: architecture-review
 subtype: adversarial
 reviewer: adversarial-architecture-reviewer

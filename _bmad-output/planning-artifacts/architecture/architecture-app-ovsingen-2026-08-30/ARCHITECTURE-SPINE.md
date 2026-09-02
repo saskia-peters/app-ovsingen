@@ -1,10 +1,10 @@
 ---
-name: THW OV Singen App V1
+name: G.E.A.R. V1
 type: architecture-spine
 purpose: build-substrate
 altitude: feature
 paradigm: Modular monolith — hexagonal (ports & adapters) per module
-scope: THW OV Singen App V1 ecosystem — User Directory & Auth, Tool Maintenance, Admin module
+scope: G.E.A.R. V1 ecosystem — User Directory & Auth, Tool Maintenance, Admin module
 status: final
 created: '2026-08-30'
 updated: '2026-08-30'
@@ -13,7 +13,7 @@ sources: [_bmad-output/planning-artifacts/prds/prd-app-ovsingen-2026-08-29/prd.m
 companions: []
 ---
 
-# Architecture Spine — THW OV Singen App V1
+# Architecture Spine — G.E.A.R. V1
 
 ## Design Paradigm
 
@@ -65,7 +65,7 @@ flowchart TD
 ### AD-3 — First-Class Columns + JSONB Extension Surface
 
 - **Binds:** Epic 1 (FR-7), Epic 2 (FR-10), NFR-R2
-- **Prevents:** DB migrations required for every new THW attribute; type-unsafe dumping of core data into JSON
+- **Prevents:** DB migrations required for every new attribute; type-unsafe dumping of core data into JSON
 - **Rule:** Users, Tools, and Tool Types expose first-class typed columns for all known/core attributes, plus exactly one `attributes JSONB` column per entity holding the extensible custom-attribute surface (FR-7/FR-10). New attributes that are not yet first-class land in JSONB with no schema migration. Migration path: when an attribute becomes core/queryable, promote it to a real column via golang-migrate and backfill, retaining the JSONB column for continued flexibility.
 
 ### AD-4 — Tool Status Is Derived, Never Stored

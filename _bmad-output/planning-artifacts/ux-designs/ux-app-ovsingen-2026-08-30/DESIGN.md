@@ -1,6 +1,6 @@
 ---
-name: THW OV Singen App
-description: Visual identity for the THW OV Singen App — a regulated, safety-critical equipment-inspection web app for THW Ortsverband Singen.
+name: G.E.A.R.
+description: Visual identity for the G.E.A.R. — a regulated, safety-critical equipment-inspection web app for Ortsverband Singen.
 status: final
 created: '2026-08-30'
 updated: '2026-08-31'
@@ -13,7 +13,7 @@ sources:
   - _bmad-output/planning-artifacts/ux-designs/ux-app-ovsingen-2026-08-30/.memlog.md
   - _bmad-output/planning-artifacts/ux-designs/ux-app-ovsingen-2026-08-30/wireframes/
 colors:
-  # Brand — THW corporate palette inherited from docs site custom.css
+  # Brand — GEAR corporate palette inherited from docs site custom.css
   brand-blue: '#003399'
   brand-blue-dark: '#002d88'
   brand-navy: '#001a66'
@@ -230,19 +230,19 @@ components:
 
 ## Brand & Style
 
-THW OV Singen App is a workbench. The visual posture is corporate THW — the authoritative blue and signal orange of a German federal relief organization — applied to a digital tool that must feel fast, glanceable, and free of ceremony. There is no decorative ambition here. Every pixel earns its place by helping a volunteer or administrator complete a safety-critical task and move on.
+G.E.A.R. is a workbench. The visual posture is corporate GEAR — the authoritative blue and signal orange of a German federal relief organization — applied to a digital tool that must feel fast, glanceable, and free of ceremony. There is no decorative ambition here. Every pixel earns its place by helping a volunteer or administrator complete a safety-critical task and move on.
 
-The inherited brand is already established on the THW docs site: THW-Blau (`{colors.brand-blue}`), navy (`{colors.brand-navy}`, `{colors.brand-navy-deep}`), and signal orange (`{colors.brand-orange}`). These carry over directly. The app adds a status traffic-light vocabulary — green, orange, red, out-of-service — derived from the inspection cycle, not chosen for aesthetics. Dark mode ships in V1, mirroring the docs site's token strategy with lightened blues (`{colors.brand-blue-darkmode}`, `{colors.brand-navy-darkmode}`, `{colors.brand-navy-deep-darkmode}`) and elevated surface tones.
+The inherited brand is already established on the docs site: GEAR-Blau (`{colors.brand-blue}`), navy (`{colors.brand-navy}`, `{colors.brand-navy-deep}`), and signal orange (`{colors.brand-orange}`). These carry over directly. The app adds a status traffic-light vocabulary — green, orange, red, out-of-service — derived from the inspection cycle, not chosen for aesthetics. Dark mode ships in V1, mirroring the docs site's token strategy with lightened blues (`{colors.brand-blue-darkmode}`, `{colors.brand-navy-darkmode}`, `{colors.brand-navy-deep-darkmode}`) and elevated surface tones.
 
 The app is regulated and safety-critical. This means the visual language must support accessibility at a floor, not an aspiration: WCAG AA contrast, large touch targets for volunteers in warehouse light or reading glasses, and microcopy precision in German — no ambiguous labels, no decorative icons replacing words. The interface reads like a checklist, not a marketing page.
 
 ## Colors
 
-The palette is corporate THW plus a traffic-light status system. No additional hues are invented.
+The palette is corporate GEAR plus a traffic-light status system. No additional hues are invented.
 
 ### Brand
 
-- **THW-Blau (`{colors.brand-blue}`)** is the primary brand color, the dominant interaction color, and the nav background. Every primary button, active filter chip, and focused element uses this blue. Dark mode shifts to `{colors.brand-blue-darkmode}` for legibility.
+- **GEAR-Blau (`{colors.brand-blue}`)** is the primary brand color, the dominant interaction color, and the nav background. Every primary button, active filter chip, and focused element uses this blue. Dark mode shifts to `{colors.brand-blue-darkmode}` for legibility.
 - **Navy (`{colors.brand-navy}`)** appears on the navbar and footer background in light mode. `{colors.brand-navy-deep}` is the deepest navy, used for footer and hero gradient endpoints. Dark mode uses `{colors.brand-navy-darkmode}` and `{colors.brand-navy-deep-darkmode}` respectively.
 - **Orange (`{colors.brand-orange}`)** is the signal accent. It appears on primary button text in wireframe style, on the orange status chip, and sparingly on interactive highlights. Never used for large fills; it's a signal, not a background.
 
@@ -319,7 +319,7 @@ No rounded-none. No sharp corners. The floor is `{rounded.sm}`. The aesthetic is
 
 ## Components
 
-- **Button (primary)** — THW-Blau fill (`{colors.brand-blue}`), white text (`{colors.ink-on-brand}`), `{rounded.md}` corners, `{typography.label}` type. Used on the main CTA of every surface: "Anmelden", "Prüfung speichern", "Registrieren", "Genehmigen & Zugang setzen". In dark mode: `{colors.brand-blue-darkmode}` fill, `{colors.ink-on-brand-dark}` text.
+- **Button (primary)** — GEAR-Blau fill (`{colors.brand-blue}`), white text (`{colors.ink-on-brand}`), `{rounded.md}` corners, `{typography.label}` type. Used on the main CTA of every surface: "Anmelden", "Prüfung speichern", "Registrieren", "Genehmigen & Zugang setzen". In dark mode: `{colors.brand-blue-darkmode}` fill, `{colors.ink-on-brand-dark}` text.
 - **Button (danger/destructive)** — Status-red fill (`{colors.status-red}`), white text, `{rounded.md}`. Used exclusively on irreversible or high-stakes actions: "Endgültig löschen" (DSGVO), "Sperren & protokollieren" (defect submission). Never used for routine confirmation. Dark mode: `{colors.status-red-dark}`.
 - **Status chip (green/orange/red/OOS)** — Pill-shaped (`{rounded.full}`), `{typography.meta}` text. Background and foreground map to the corresponding `{colors.status-*}` tokens. Appears on the dashboard summary count block and inline next to tool names. Each status has a dedicated token pair; no generic "status" component — the specific color IS the component.
 - **Pass/Fail chip** — `{rounded.md}` corners, `{typography.body}` type. Green background for "OK ✓" / "BESTANDEN"; red background for "FEHLER" / "NICHT BESTANDEN". These are large, tappable, single-screen inspection inputs — at least 48px touch target. Appear in pairs on each checklist item or as a single toggle on pass/fail tools. Active state: full saturation; inactive: `{colors.surface-base}` background with border.

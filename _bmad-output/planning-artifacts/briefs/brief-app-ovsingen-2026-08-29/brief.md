@@ -1,6 +1,6 @@
-# Product Brief: THW OV Singen App
+# Product Brief: G.E.A.R.
 
-This document outlines the scope, objectives, and requirements for the **THW OV Singen App**, a modularized web application designed for mobile and desktop devices. The initial release focuses on building a standalone user directory and a tool maintenance/inspection scheduling module.
+This document outlines the scope, objectives, and requirements for the **G.E.A.R.**, a modularized web application designed for mobile and desktop devices. The initial release focuses on building a standalone user directory and a tool maintenance/inspection scheduling module.
 
 ---
 

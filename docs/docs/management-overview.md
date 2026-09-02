@@ -1,12 +1,12 @@
 ---
 sidebar_position: 2
 title: Management Overview
-description: A plain-language overview of the THW OV Singen App — what it is, why it exists, and how it works — for readers who are new to the project.
+description: A plain-language overview of the G.E.A.R. — what it is, why it exists, and how it works — for readers who are new to the project.
 ---
 
 # Management Overview
 
-**The THW OV Singen App keeps the Ortsverband's equipment inspection-ready — with the right tool, inspected by the right person, on time. No more paper lists, spreadsheets, or last-minute surprises.**
+**The G.E.A.R. keeps the Ortsverband's equipment inspection-ready — with the right tool, inspected by the right person, on time. No more paper lists, spreadsheets, or last-minute surprises.**
 
 This page explains the app in plain language. It is written for decision-makers and new team members who are not (yet) familiar with the project. If you want the full detail, the [PRD](/docs/planning/prd) and [Architecture Spine](/docs/planning/architecture-spine) documents go much deeper.
 
@@ -18,7 +18,7 @@ The app replaces the current manual, paper-driven way of tracking tool inspectio
 
 ## The problem it solves
 
-The THW Ortsverband Singen manages many specialized tools and machines — chainsaws, generators, rescue equipment, and more. Today, staying on top of
+The Ortsverband Singen manages many specialized tools and machines — chainsaws, generators, rescue equipment, and more. Today, staying on top of
 
 - **who** may operate which tool (qualifications),
 - **when** each tool must be inspected next,
@@ -53,7 +53,7 @@ flowchart LR
         A["Admin"]
     end
 
-    subgraph App["THW OV Singen App"]
+    subgraph App["G.E.A.R."]
         U["User Directory & Login"]
         T["Tool & Inspection Management"]
         M["Admin & Configuration"]

@@ -11,7 +11,7 @@
 # ─────────────────────────────────────────────────────────────────
 
 [core]
-project_name = "app-ovsingen"
+project_name = "gear"
 document_output_language = "English"
 output_folder = "_bmad-output"
 

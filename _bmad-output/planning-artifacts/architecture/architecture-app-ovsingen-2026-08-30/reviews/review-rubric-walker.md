@@ -26,7 +26,7 @@ The spine correctly identifies and pins the subjectively highest-risk divergence
 |---|---|---|
 | Module boundary shape / how modules talk | AD-1 | yes — ports, no cross-imports, composition-root-only wiring |
 | Who owns users/groups/permissions/qualifications | AD-2 | yes — single owner, all others consume a port |
-| Store new THW attributes where | AD-3 | yes — first-class columns + exactly one JSONB column; promotion path via golang-migrate |
+| Store new attributes where | AD-3 | yes — first-class columns + exactly one JSONB column; promotion path via golang-migrate |
 | Tool status value (stored vs derived) | AD-4 | yes — pure read-time derivation from inspection records |
 | Next-due date: rule, override, reinstatement reset, color thresholds | AD-5 | yes — one shared function, formula and 14-day thresholds stated |
 | Server-side authz truth | AD-6 | yes |
@@ -124,7 +124,7 @@ The Structural Seed section *claims* the operational envelope ("the cold-start s
 
 **Silent — neither decided, deferred, nor listed as an open question:**
 - **Deployment environments** (dev/staging/prod split). For a greenfield repo whose CI/CD is deferred, the environment split is the thing the CI/CD will feed; it is never mentioned.
-- **Infra/provider strategy** (where this runs: THW on-prem hardware vs. a VPS/cloud tier) — this cascades into DNS/TLS termination, which is why NFR-S1 (TLS 1.2+, enforce/reject plain HTTP) currently has no owner and sits unmapped.
+- **Infra/provider strategy** (where this runs: on-prem hardware vs. a VPS/cloud tier) — this cascades into DNS/TLS termination, which is why NFR-S1 (TLS 1.2+, enforce/reject plain HTTP) currently has no owner and sits unmapped.
 - **Operations/monitoring beyond structured logs**: NFR-R4's 99% availability has no owner; there is no uptime/metrics/error-tracking story at all (O1 logging is the single observability pin).
 - **Secrets management** (NFR-S4): silent in every section.
 

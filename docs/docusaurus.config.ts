@@ -4,11 +4,11 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 const organizationName = 'saskia-peters';
-const projectName = 'app-ovsingen';
+const projectName = 'gear';
 
 const config: Config = {
-  title: 'THW OV Singen App',
-  tagline: 'Operational equipment management for the THW Ortsverband Singen',
+  title: 'G.E.A.R.',
+  tagline: 'Operational equipment management for the Ortsverband Singen',
   favicon: 'img/logo.svg',
 
   future: {
@@ -64,9 +64,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'THW OV Singen App',
+      title: 'G.E.A.R.',
       logo: {
-        alt: 'THW OV Singen App Logo',
+        alt: 'G.E.A.R. Logo',
         src: 'img/logo.svg',
       },
       items: [
@@ -119,7 +119,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} THW OV Singen. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} G.E.A.R. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,
