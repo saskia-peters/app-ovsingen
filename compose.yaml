@@ -1,5 +1,5 @@
-# G.E.A.R. local development stack (podman-compose / docker-compose).
-# Single Compose source shared by both runtimes; driven from the justfile.
+# G.E.A.R. local development stack (podman-compose).
+# Single Compose source driven from the justfile.
 
 services:
   db:
@@ -21,6 +21,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U gear -d gear"]
       interval: 5s
       timeout: 3s
+      start_period: 20s
       retries: 10
 
 volumes:

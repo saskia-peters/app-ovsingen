@@ -72,13 +72,17 @@ migrate-up: db-wait
 migrate-down: db-wait
     go run -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@{{MIGRATE_VERSION}} -path ./migrations --database "{{DATABASE_URL}}" down -all
 
+# Ensure web dependencies exist before running the SPA (fresh checkout)
+web-deps:
+    @test -d web/node_modules || npm --prefix web ci
+
 # Run the full dev stack: DB + API + Vite SPA
-dev: db-up
-    npm --prefix web run dev &
-    vite_pid=$$!
-    sleep 2
-    kill -0 "$$vite_pid" 2>/dev/null || { echo "vite failed to start (see output above)" >&2; exit 1; }
-    trap 'kill "$$vite_pid" 2>/dev/null; kill $(jobs -p) 2>/dev/null' EXIT INT TERM
+dev: web-deps db-up
+    npm --prefix web run dev & \
+    vite_pid=$!; \
+    sleep 2; \
+    kill -0 "$vite_pid" 2>/dev/null || { echo "vite failed to start (see output above)" >&2; exit 1; }; \
+    trap 'kill "$vite_pid" 2>/dev/null; kill $(jobs -p) 2>/dev/null' EXIT INT TERM; \
     go run ./cmd/server
 
 # Build all Go packages

@@ -37,7 +37,7 @@ story_location:
   /home/saskia/devprojects/gear/_bmad-output/implementation-artifacts
 development_status:
   epic-1: in-progress
-  1-1-project-scaffold-database-foundation: review
+  1-1-project-scaffold-database-foundation: done
   1-2-dashboard-foundation-app-home: backlog
   1-3-self-registration-with-admin-pending-approval: backlog
   1-4-email-password-authentication: backlog

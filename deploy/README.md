@@ -8,5 +8,4 @@ directory is reserved for later stories/deploy epic:
 - backup job definitions and restore procedure (NFR-R3),
 - environment-specific compose overrides.
 
-**No docker-specific config; the single Compose source is shared between
-docker and podman-compose runtimes.**
+**No docker-specific config; the Compose source is driven via podman-compose.**

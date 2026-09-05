@@ -96,3 +96,24 @@ func TestStatusWriterUnwraps(t *testing.T) {
 		t.Error("ResponseController could not reach the underlying ResponseWriter through statusWriter")
 	}
 }
+
+func TestResponseControllerUnwrapsFullMiddlewareChain(t *testing.T) {
+	under := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	// Mount in the production composition root order: Recovery outer, RequestLogger inner
+	chain := Recovery(log)(RequestLogger(log)(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			if err := http.NewResponseController(w).SetReadDeadline(time.Time{}); err != nil {
+				t.Errorf("SetReadDeadline through full chain: %v", err)
+			}
+			w.WriteHeader(http.StatusOK)
+		}),
+	))
+
+	chain.ServeHTTP(under, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+
+	if !under.deadlineSet {
+		t.Error("ResponseController could not reach the underlying ResponseWriter through full middleware chain")
+	}
+}

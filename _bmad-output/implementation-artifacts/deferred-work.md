@@ -30,3 +30,7 @@ Triage output of review loops — real, non-story-blocking findings that are not
   summary: No Go CI pipeline — `.github/workflows/` ships only `docs.yml`; `go build/vet/test/lint` run only when a human invokes the justfile.
   evidence: Story 1.1 AC does not require CI; pipelines belong to the deploy/ops epic (OpenTofu/Cloud Run are already planned).
   recommended: add a `ci.yml` running `just build`, `just vet`, `just test`, `just lint` (+ docs build) in the deploy/CI story.
+
+## Deferred from: code review (2026-09-05) of spec-1-1-project-scaffold-database-foundation.md
+
+- Env var split: `DATABASE_URL` (justfile / golang-migrate CLI) vs `GEAR_DATABASE_URL` (Go server). Defaults are identical (`postgres://gear:gear@localhost:5432/gear?sslmode=disable`) and each tool reads only its own contract, so a developer overriding just one variable gets a silent mismatch between what the migrate CLI and the app connect to. Real DX footgun for later stories that touch env/secret management (e.g. 1.4 auth, integration DB spins). Revisit with a documented alias or single-source env resolution when that work lands.

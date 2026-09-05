@@ -64,6 +64,12 @@ func (w *committedWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+// Unwrap exposes the underlying ResponseWriter so http.ResponseController
+// traverses through recovery wrappers to the underlying writer.
+func (w *committedWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 // Recovery converts handler panics into the uniform JSON error envelope with
 // status 500, instead of chi's default recoverer which emits plain text. The
 // panic is logged with the request context; requests that panicked before any
