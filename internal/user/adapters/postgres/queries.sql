@@ -15,3 +15,27 @@ FROM permission_groups pg
 JOIN user_permission_groups upg ON upg.permission_group_id = pg.id
 WHERE upg.user_id = $1
 ORDER BY pg.name;
+
+-- name: CreateRegisteredUser :one
+INSERT INTO users (
+    email,
+    display_name,
+    first_name,
+    last_name,
+    password_hash,
+    state
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    'pending_approval'
+)
+RETURNING id, email, display_name, first_name, last_name, password_hash, state, is_mfa_enabled, attributes, created_at, updated_at;
+
+-- name: GetUserByEmail :one
+SELECT id, email, display_name, first_name, last_name, password_hash, state, is_mfa_enabled, attributes, created_at, updated_at
+FROM users
+WHERE email = $1;
+

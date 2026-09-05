@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/saskia-peters/gear/internal/platform/httpapi"
 )
 
@@ -74,4 +76,21 @@ func TestRouterWrongMethodReturnsJSON405(t *testing.T) {
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/healthz", nil))
 
 	assertJSONEnvelope(t, rec, http.StatusMethodNotAllowed, "method_not_allowed")
+}
+
+func TestRouterWithAuth(t *testing.T) {
+	authRouter := chi.NewRouter()
+	authRouter.Post("/register", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"message":"ok"}`))
+	})
+
+	r := New(fakePinger{}, discardLogger(), WithAuth(authRouter))
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
 }

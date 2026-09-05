@@ -40,6 +40,9 @@ type User struct {
 	Attributes   []byte             `json:"attributes"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	FirstName    string             `json:"first_name"`
+	LastName     string             `json:"last_name"`
+	PasswordHash string             `json:"password_hash"`
 }
 
 type UserPermission struct {

@@ -17,9 +17,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/saskia-peters/gear/internal/platform/config"
+	"github.com/saskia-peters/gear/internal/platform/crypto"
 	"github.com/saskia-peters/gear/internal/platform/logger"
 	"github.com/saskia-peters/gear/internal/platform/router"
+	userhttp "github.com/saskia-peters/gear/internal/user/adapters/http"
 	userpostgres "github.com/saskia-peters/gear/internal/user/adapters/postgres"
+	usercore "github.com/saskia-peters/gear/internal/user/core"
 )
 
 func main() {
@@ -36,13 +39,15 @@ func main() {
 	}
 	defer pool.Close()
 
-	// AD-1: adapters are constructed here and handed to the hexagons. The
-	// User repository adapter is wired now; its service and handlers land
-	// with stories 1.3-1.10.
+	// AD-1: adapters are constructed here and handed to the hexagons.
 	userStore := userpostgres.New(pool)
-	log.Info("wired user repository adapter", "store", fmt.Sprintf("%T", userStore))
+	userRepo := userpostgres.NewRepository(userStore)
+	hasher := crypto.NewHasher()
+	userService := usercore.NewService(userRepo, hasher)
+	userHandler := userhttp.NewHandler(userService, log)
+	log.Info("wired user repository and registration service", "store", fmt.Sprintf("%T", userStore))
 
-	r := router.New(pool, log)
+	r := router.New(pool, log, router.WithAuth(userHandler.Routes()))
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

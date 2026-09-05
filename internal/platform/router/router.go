@@ -16,16 +16,33 @@ import (
 	appmw "github.com/saskia-peters/gear/internal/platform/middleware"
 )
 
+// Option allows customizing the mounted router (e.g. mounting module routes).
+type Option func(*chi.Mux)
+
+// WithAuth mounts the authentication and user directory routes at /api/v1/auth.
+func WithAuth(h http.Handler) Option {
+	return func(r *chi.Mux) {
+		if h != nil {
+			r.Mount("/api/v1/auth", h)
+		}
+	}
+}
+
 // New returns the mounted chi router. The panic-recovery middleware and the
 // 404/405 handlers answer with the uniform JSON envelope (not plain text), and
 // /healthz is wired to the given Pinger with the structured request logger.
-func New(p health.Pinger, log *slog.Logger) *chi.Mux {
+func New(p health.Pinger, log *slog.Logger, opts ...Option) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(appmw.Recovery(log))
 	r.Use(appmw.RequestLogger(log))
 	r.NotFound(httpapi.NotFoundHandler())
 	r.MethodNotAllowed(httpapi.MethodNotAllowedHandler())
 	r.Get("/healthz", health.New(p, log))
+
+	for _, opt := range opts {
+		opt(r)
+	}
+
 	return r
 }
 

@@ -86,6 +86,29 @@ describe('App & Dashboard Foundation', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Anmeldung' })).toBeInTheDocument()
     expect(screen.getByText(/Die Authentifizierung folgt in Story 1.4/i)).toBeInTheDocument()
 
+    const registerLink = screen.getByRole('link', { name: 'Noch kein Konto? Jetzt registrieren' })
+    expect(registerLink).toBeInTheDocument()
+
+    const backLink = screen.getByRole('link', { name: 'Zurück zur Übersicht' })
+    expect(backLink).toBeInTheDocument()
+    await user.click(backLink)
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Übersicht' })).toBeInTheDocument()
+  })
+
+  it('REGISTER_ROUTE: renders register page at /register and allows navigation back to overview', async () => {
+    const user = userEvent.setup()
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/register']}>
+          <AppRoutes />
+        </MemoryRouter>
+      </ThemeProvider>,
+    )
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Registrierung' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Vorname')).toBeInTheDocument()
+
     const backLink = screen.getByRole('link', { name: 'Zurück zur Übersicht' })
     expect(backLink).toBeInTheDocument()
     await user.click(backLink)

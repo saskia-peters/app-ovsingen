@@ -11,6 +11,72 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createRegisteredUser = `-- name: CreateRegisteredUser :one
+INSERT INTO users (
+    email,
+    display_name,
+    first_name,
+    last_name,
+    password_hash,
+    state
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    'pending_approval'
+)
+RETURNING id, email, display_name, first_name, last_name, password_hash, state, is_mfa_enabled, attributes, created_at, updated_at
+`
+
+type CreateRegisteredUserParams struct {
+	Email        string `json:"email"`
+	DisplayName  string `json:"display_name"`
+	FirstName    string `json:"first_name"`
+	LastName     string `json:"last_name"`
+	PasswordHash string `json:"password_hash"`
+}
+
+type CreateRegisteredUserRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	Email        string             `json:"email"`
+	DisplayName  string             `json:"display_name"`
+	FirstName    string             `json:"first_name"`
+	LastName     string             `json:"last_name"`
+	PasswordHash string             `json:"password_hash"`
+	State        string             `json:"state"`
+	IsMfaEnabled bool               `json:"is_mfa_enabled"`
+	Attributes   []byte             `json:"attributes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateRegisteredUser(ctx context.Context, arg CreateRegisteredUserParams) (CreateRegisteredUserRow, error) {
+	row := q.db.QueryRow(ctx, createRegisteredUser,
+		arg.Email,
+		arg.DisplayName,
+		arg.FirstName,
+		arg.LastName,
+		arg.PasswordHash,
+	)
+	var i CreateRegisteredUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.FirstName,
+		&i.LastName,
+		&i.PasswordHash,
+		&i.State,
+		&i.IsMfaEnabled,
+		&i.Attributes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getPermissionByCode = `-- name: GetPermissionByCode :one
 
 SELECT id, code, description
@@ -33,6 +99,45 @@ func (q *Queries) GetPermissionByCode(ctx context.Context, code string) (GetPerm
 	row := q.db.QueryRow(ctx, getPermissionByCode, code)
 	var i GetPermissionByCodeRow
 	err := row.Scan(&i.ID, &i.Code, &i.Description)
+	return i, err
+}
+
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT id, email, display_name, first_name, last_name, password_hash, state, is_mfa_enabled, attributes, created_at, updated_at
+FROM users
+WHERE email = $1
+`
+
+type GetUserByEmailRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	Email        string             `json:"email"`
+	DisplayName  string             `json:"display_name"`
+	FirstName    string             `json:"first_name"`
+	LastName     string             `json:"last_name"`
+	PasswordHash string             `json:"password_hash"`
+	State        string             `json:"state"`
+	IsMfaEnabled bool               `json:"is_mfa_enabled"`
+	Attributes   []byte             `json:"attributes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
+	row := q.db.QueryRow(ctx, getUserByEmail, email)
+	var i GetUserByEmailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.FirstName,
+		&i.LastName,
+		&i.PasswordHash,
+		&i.State,
+		&i.IsMfaEnabled,
+		&i.Attributes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
 	return i, err
 }
 

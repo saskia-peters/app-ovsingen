@@ -12,6 +12,9 @@ export function LoginPage() {
           <p className={styles.description}>
             Die Authentifizierung folgt in Story 1.4.
           </p>
+          <Link to="/register" className={styles.secondaryLink}>
+            Noch kein Konto? Jetzt registrieren
+          </Link>
           <Link to="/" className={styles.backLink}>
             Zurück zur Übersicht
           </Link>

@@ -3,6 +3,7 @@ import { ThemeProvider } from './context/ThemeContext.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { DashboardPage } from './pages/DashboardPage.tsx'
 import { LoginPage } from './pages/LoginPage.tsx'
+import { RegisterPage } from './pages/RegisterPage.tsx'
 import { NotFoundPage } from './pages/NotFoundPage.tsx'
 
 export function AppRoutes() {
@@ -10,6 +11,7 @@ export function AppRoutes() {
     <Routes>
       <Route path="/" element={<DashboardPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )
