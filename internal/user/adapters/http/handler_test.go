@@ -18,6 +18,8 @@ import (
 
 type mockService struct {
 	registerFunc func(ctx context.Context, input core.RegisterInput) (*ports.RegisterResult, error)
+	loginFunc    func(ctx context.Context, input core.LoginInput) (*ports.LoginResult, error)
+	logoutFunc   func(ctx context.Context, rawToken string) error
 }
 
 func (m *mockService) Register(ctx context.Context, input core.RegisterInput) (*ports.RegisterResult, error) {
@@ -28,6 +30,29 @@ func (m *mockService) Register(ctx context.Context, input core.RegisterInput) (*
 		Message: core.UniformSuccessMessage,
 		Status:  "pending_approval",
 	}, nil
+}
+
+func (m *mockService) Login(ctx context.Context, input core.LoginInput) (*ports.LoginResult, error) {
+	if m.loginFunc != nil {
+		return m.loginFunc(ctx, input)
+	}
+	return &ports.LoginResult{
+		Token: "opaque-token",
+		User: core.LoginUser{
+			ID:          "u-1",
+			Email:       "max@example.com",
+			DisplayName: "Max Mustermann",
+			FirstName:   "Max",
+			LastName:    "Mustermann",
+		},
+	}, nil
+}
+
+func (m *mockService) Logout(ctx context.Context, rawToken string) error {
+	if m.logoutFunc != nil {
+		return m.logoutFunc(ctx, rawToken)
+	}
+	return nil
 }
 
 func discardLogger() *slog.Logger {
@@ -194,5 +219,170 @@ func TestHandlerRegisterInternalError(t *testing.T) {
 	}
 	if env.Error.Code != "internal_error" {
 		t.Errorf("code = %q, want %q", env.Error.Code, "internal_error")
+	}
+}
+
+func TestHandlerLoginHappyPath(t *testing.T) {
+	svc := &mockService{}
+	h := NewHandler(svc, discardLogger())
+
+	payload := map[string]string{"email": "max@example.com", "password": "geheim123456"}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	h.Login(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var res ports.LoginResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if res.Token != "opaque-token" {
+		t.Errorf("token = %q, want opaque-token", res.Token)
+	}
+	if res.User.Email != "max@example.com" {
+		t.Errorf("user email = %q, want max@example.com", res.User.Email)
+	}
+}
+
+func TestHandlerLoginInvalidCredentials(t *testing.T) {
+	svc := &mockService{
+		loginFunc: func(ctx context.Context, input core.LoginInput) (*ports.LoginResult, error) {
+			return nil, core.ErrInvalidCredentials
+		},
+	}
+	h := NewHandler(svc, discardLogger())
+
+	payload := map[string]string{"email": "nobody@example.com", "password": "falsch"}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.Login(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+
+	var env httpapi.ErrorEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("failed to decode error envelope: %v", err)
+	}
+	if env.Error.Code != "invalid_credentials" {
+		t.Errorf("code = %q, want invalid_credentials", env.Error.Code)
+	}
+	if env.Error.Message != "E-Mail oder Passwort ist falsch." {
+		t.Errorf("message = %q, want anti-enumeration microcopy", env.Error.Message)
+	}
+}
+
+func TestHandlerLoginInvalidJSON(t *testing.T) {
+	svc := &mockService{}
+	h := NewHandler(svc, discardLogger())
+
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader([]byte("{bad")))
+	rec := httptest.NewRecorder()
+
+	h.Login(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestHandlerLoginInternalError(t *testing.T) {
+	svc := &mockService{
+		loginFunc: func(ctx context.Context, input core.LoginInput) (*ports.LoginResult, error) {
+			return nil, errors.New("db down")
+		},
+	}
+	h := NewHandler(svc, discardLogger())
+
+	payload := map[string]string{"email": "a@example.com", "password": "x"}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.Login(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestHandlerLoginInvalidInput(t *testing.T) {
+	svc := &mockService{
+		loginFunc: func(ctx context.Context, input core.LoginInput) (*ports.LoginResult, error) {
+			return nil, core.ErrInvalidLoginInput
+		},
+	}
+	h := NewHandler(svc, discardLogger())
+
+	payload := map[string]string{"email": "a@example.com", "password": "x"}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.Login(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	var env httpapi.ErrorEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("failed to decode error envelope: %v", err)
+	}
+	if env.Error.Code != "invalid_request" {
+		t.Errorf("code = %q, want invalid_request", env.Error.Code)
+	}
+	if env.Error.Message != core.MsgInvalidLoginInput {
+		t.Errorf("message = %q, want %q", env.Error.Message, core.MsgInvalidLoginInput)
+	}
+}
+
+func TestHandlerLogoutHappyPath(t *testing.T) {
+	var gotToken string
+	svc := &mockService{
+		logoutFunc: func(ctx context.Context, rawToken string) error {
+			gotToken = rawToken
+			return nil
+		},
+	}
+	h := NewHandler(svc, discardLogger())
+
+	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	req.Header.Set("Authorization", "Bearer sesstoken123")
+	rec := httptest.NewRecorder()
+
+	h.Logout(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	if gotToken != "sesstoken123" {
+		t.Errorf("logout token = %q, want sesstoken123", gotToken)
+	}
+}
+
+func TestHandlerLogoutWithoutToken(t *testing.T) {
+	svc := &mockService{}
+	h := NewHandler(svc, discardLogger())
+
+	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	rec := httptest.NewRecorder()
+
+	h.Logout(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204 (idempotent)", rec.Code)
 	}
 }

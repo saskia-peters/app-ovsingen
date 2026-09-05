@@ -5,9 +5,12 @@ import { MemoryRouter } from 'react-router-dom'
 import App, { AppRoutes } from './App.tsx'
 import { ThemeProvider } from './context/ThemeContext.tsx'
 
+const TOKEN_STORAGE_KEY = 'gear.session_token'
+
 describe('App & Dashboard Foundation', () => {
   beforeEach(() => {
     localStorage.clear()
+    localStorage.setItem(TOKEN_STORAGE_KEY, 'test-session-token')
     document.documentElement.removeAttribute('data-theme')
   })
 
@@ -73,7 +76,15 @@ describe('App & Dashboard Foundation', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
   })
 
-  it('LOGIN_ROUTE: renders login placeholder at /login and allows navigation back to dashboard', async () => {
+  it('PROTECTED_DASHBOARD: redirects to /login when no session token is present', () => {
+    localStorage.removeItem(TOKEN_STORAGE_KEY)
+    render(<App />)
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Anmeldung' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Anmelden' })).toBeInTheDocument()
+  })
+
+  it('LOGIN_ROUTE: renders login form at /login and allows navigation back to dashboard', async () => {
     const user = userEvent.setup()
     render(
       <ThemeProvider>
@@ -84,7 +95,9 @@ describe('App & Dashboard Foundation', () => {
     )
 
     expect(screen.getByRole('heading', { level: 2, name: 'Anmeldung' })).toBeInTheDocument()
-    expect(screen.getByText(/Die Authentifizierung folgt in Story 1.4/i)).toBeInTheDocument()
+    expect(screen.getByLabelText('E-Mail-Adresse')).toBeInTheDocument()
+    expect(screen.getByLabelText('Passwort')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Anmelden' })).toBeInTheDocument()
 
     const registerLink = screen.getByRole('link', { name: 'Noch kein Konto? Jetzt registrieren' })
     expect(registerLink).toBeInTheDocument()

@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/saskia-peters/gear/internal/platform/auth"
 	"github.com/saskia-peters/gear/internal/platform/config"
 	"github.com/saskia-peters/gear/internal/platform/crypto"
 	"github.com/saskia-peters/gear/internal/platform/logger"
@@ -43,11 +44,20 @@ func main() {
 	userStore := userpostgres.New(pool)
 	userRepo := userpostgres.NewRepository(userStore)
 	hasher := crypto.NewHasher()
-	userService := usercore.NewService(userRepo, hasher)
+	sessionManager := usercore.NewSessionManager(userRepo, cfg.SessionIdle)
+	userService := usercore.NewService(userRepo, hasher, sessionManager)
 	userHandler := userhttp.NewHandler(userService, log)
-	log.Info("wired user repository and registration service", "store", fmt.Sprintf("%T", userStore))
 
-	r := router.New(pool, log, router.WithAuth(userHandler.Routes()))
+	// The auth gateway resolves sessions and the live permission set (AD-6).
+	const protectedPermission = "admin.recovery.approve"
+	protectedRoute := auth.Route(sessionManager, userRepo, protectedPermission)
+
+	log.Info("wired user repository, sessions and registration/auth service", "store", fmt.Sprintf("%T", userStore))
+
+	r := router.New(pool, log,
+		router.WithAuth(userHandler.Routes()),
+		router.WithProtected(protectedRoute),
+	)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

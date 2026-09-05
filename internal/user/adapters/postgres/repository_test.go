@@ -74,3 +74,104 @@ func TestPostgresRepository(t *testing.T) {
 		t.Errorf("fetched.State = %q, want %q", fetched.State, core.StatePendingApproval)
 	}
 }
+
+func TestPostgresSessionAndPermissionRepository(t *testing.T) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://gear:gear@localhost:5432/gear?sslmode=disable"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		t.Skipf("skipping db integration test: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.Ping(ctx); err != nil {
+		t.Skipf("skipping db integration test (db ping failed): %v", err)
+	}
+
+	queries := New(pool)
+	repo := NewRepository(queries)
+
+	testEmail := "auth.test." + time.Now().Format("20060102150405.000000") + "@gear.local"
+
+	created, err := repo.CreateRegisteredUser(ctx, testEmail, "Auth Test", "Auth", "Test", "$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHRzYWx0$8U3f5yO8JUpfGT5WmljHhL8n2nWlVEhL2fj7EXpS9gM")
+	if err != nil {
+		t.Fatalf("CreateRegisteredUser failed: %v", err)
+	}
+	if created.State != core.StatePendingApproval {
+		t.Fatalf("created.State = %q, want pending_approval", created.State)
+	}
+
+	// 1. CreateSession + GetSessionByTokenHash round-trip.
+	expiry := time.Now().UTC().Add(time.Hour)
+	sess, err := repo.CreateSession(ctx, created.ID, "hash-of-raw-token", expiry)
+	if err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+	if sess.UserID != created.ID {
+		t.Errorf("session user id = %q, want %q", sess.UserID, created.ID)
+	}
+
+	fetched, err := repo.GetSessionByTokenHash(ctx, "hash-of-raw-token")
+	if err != nil {
+		t.Fatalf("GetSessionByTokenHash failed: %v", err)
+	}
+	if fetched.ID != sess.ID {
+		t.Errorf("fetched session id = %q, want %q", fetched.ID, sess.ID)
+	}
+	if fetched.User == nil || fetched.User.ID != created.ID {
+		t.Errorf("fetched session user = %+v, want attached user %q", fetched.User, created.ID)
+	}
+
+	// Unknown hash maps to core.ErrSessionNotFound.
+	if _, err := repo.GetSessionByTokenHash(ctx, "no-such-hash"); err != core.ErrSessionNotFound {
+		t.Errorf("unknown token error = %v, want core.ErrSessionNotFound", err)
+	}
+
+	// 2. ListPermissionsByUser for a fresh user resolves to the empty set.
+	perms, err := repo.ListPermissionsByUser(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("ListPermissionsByUser failed: %v", err)
+	}
+	if len(perms) != 0 {
+		t.Errorf("permissions = %v, want empty set", perms)
+	}
+
+	// 3. The seeded admin resolves the admin.recovery.approve permission
+	// (AD-12 additive union) and the admin group.
+	admin, err := repo.GetUserByEmail(ctx, "admin.1@gear.local")
+	if err != nil {
+		t.Fatalf("GetUserByEmail(admin) failed: %v", err)
+	}
+	if admin == nil {
+		t.Skip("seeded admin not present — skipping permission resolution assertion")
+	}
+	adminPerms, err := repo.ListPermissionsByUser(ctx, admin.ID)
+	if err != nil {
+		t.Fatalf("ListPermissionsByUser(admin) failed: %v", err)
+	}
+	found := false
+	for _, p := range adminPerms {
+		if p == "admin.recovery.approve" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("admin permissions %v missing admin.recovery.approve", adminPerms)
+	}
+
+	// 4. DeleteSessionByTokenHash invalidates the session server-side,
+	// atomically by hashed token.
+	if err := repo.DeleteSessionByTokenHash(ctx, "hash-of-raw-token"); err != nil {
+		t.Fatalf("DeleteSessionByTokenHash failed: %v", err)
+	}
+	if _, err := repo.GetSessionByTokenHash(ctx, "hash-of-raw-token"); err != core.ErrSessionNotFound {
+		t.Errorf("deleted token error = %v, want core.ErrSessionNotFound", err)
+	}
+}

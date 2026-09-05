@@ -3,7 +3,9 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 )
 
 type mockRepo struct {
@@ -11,10 +13,12 @@ type mockRepo struct {
 	createCalls int
 	getCalls    int
 	createErr   error
+	permsErr    error
+	perms       map[string][]string
 }
 
 func newMockRepo() *mockRepo {
-	return &mockRepo{users: make(map[string]*User)}
+	return &mockRepo{users: make(map[string]*User), perms: make(map[string][]string)}
 }
 
 func (m *mockRepo) CreateRegisteredUser(_ context.Context, email, displayName, firstName, lastName, passwordHash string) (*User, error) {
@@ -43,8 +47,16 @@ func (m *mockRepo) GetUserByEmail(_ context.Context, email string) (*User, error
 	return u, nil
 }
 
+func (m *mockRepo) ListPermissionsByUser(_ context.Context, userID string) ([]string, error) {
+	if m.permsErr != nil {
+		return nil, m.permsErr
+	}
+	return m.perms[userID], nil
+}
+
 type mockHasher struct {
-	hashCalls int
+	hashCalls   int
+	verifyCalls int
 }
 
 func (m *mockHasher) Hash(password string) (string, error) {
@@ -53,13 +65,87 @@ func (m *mockHasher) Hash(password string) (string, error) {
 }
 
 func (m *mockHasher) Verify(password, encodedHash string) (bool, error) {
+	m.verifyCalls++
 	return encodedHash == "hashed:"+password, nil
+}
+
+// VerifyCalls returns the number of Verify invocations (used to assert
+// timing-normalization behaviour on login failures).
+func (m *mockHasher) VerifyCalls() int {
+	return m.verifyCalls
+}
+
+// mockSessionStore is an in-memory SessionStore for tests.
+type mockSessionStore struct {
+	sessions map[string]*Session
+	users    map[string]*User
+	nextID   int
+}
+
+func newMockSessionStore() *mockSessionStore {
+	return &mockSessionStore{sessions: make(map[string]*Session)}
+}
+
+// withUsers registers users so GetSessionByTokenHash can attach the session
+// owner, mirroring the repository's JOIN on users.
+func (m *mockSessionStore) withUsers(users ...*User) *mockSessionStore {
+	if m.users == nil {
+		m.users = make(map[string]*User)
+	}
+	for _, u := range users {
+		m.users[u.ID] = u
+	}
+	return m
+}
+
+func (m *mockSessionStore) CreateSession(_ context.Context, userID, tokenHash string, expiresAt time.Time) (*Session, error) {
+	m.nextID++
+	s := &Session{
+		ID:        fmt.Sprintf("sess-%d", m.nextID),
+		UserID:    userID,
+		TokenHash: tokenHash,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now().UTC(),
+	}
+	if m.users != nil {
+		s.User = m.users[userID]
+	}
+	m.sessions[tokenHash] = s
+	return s, nil
+}
+
+func (m *mockSessionStore) GetSessionByTokenHash(_ context.Context, tokenHash string) (*Session, error) {
+	s, ok := m.sessions[tokenHash]
+	if !ok {
+		return nil, ErrSessionNotFound
+	}
+	if m.users != nil {
+		s.User = m.users[s.UserID]
+	}
+	return s, nil
+}
+
+func (m *mockSessionStore) DeleteSessionByTokenHash(_ context.Context, tokenHash string) error {
+	delete(m.sessions, tokenHash)
+	return nil
+}
+
+// newTestService builds a Service with in-memory repo/hasher/session store.
+func newTestService(repo *mockRepo, hasher *mockHasher) (*Service, *mockSessionStore) {
+	store := newMockSessionStore()
+	var users []*User
+	for _, u := range repo.users {
+		users = append(users, u)
+	}
+	store.withUsers(users...)
+	sm := NewSessionManager(store, time.Hour)
+	return NewService(repo, hasher, sm), store
 }
 
 func TestServiceRegisterHappyPath(t *testing.T) {
 	repo := newMockRepo()
 	hasher := &mockHasher{}
-	svc := NewService(repo, hasher)
+	svc, _ := newTestService(repo, hasher)
 
 	input := RegisterInput{
 		FirstName:       "Erika",
@@ -103,7 +189,7 @@ func TestServiceRegisterHappyPath(t *testing.T) {
 func TestServiceRegisterDuplicateEmailAntiEnumeration(t *testing.T) {
 	repo := newMockRepo()
 	hasher := &mockHasher{}
-	svc := NewService(repo, hasher)
+	svc, _ := newTestService(repo, hasher)
 
 	repo.users["existing@example.com"] = &User{
 		Email: "existing@example.com",
@@ -142,7 +228,7 @@ func TestServiceRegisterDuplicateEmailAntiEnumeration(t *testing.T) {
 func TestServiceRegisterValidationErrors(t *testing.T) {
 	repo := newMockRepo()
 	hasher := &mockHasher{}
-	svc := NewService(repo, hasher)
+	svc, _ := newTestService(repo, hasher)
 
 	input := RegisterInput{
 		FirstName:       "Max",
@@ -165,7 +251,7 @@ func TestServiceRegisterDuplicateKeyRaceCondition(t *testing.T) {
 	repo := newMockRepo()
 	repo.createErr = errors.New("ERROR: duplicate key value violates unique constraint \"users_email_key\" (SQLSTATE 23505)")
 	hasher := &mockHasher{}
-	svc := NewService(repo, hasher)
+	svc, _ := newTestService(repo, hasher)
 
 	input := RegisterInput{
 		FirstName:       "Hans",

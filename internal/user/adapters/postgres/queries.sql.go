@@ -77,6 +77,43 @@ func (q *Queries) CreateRegisteredUser(ctx context.Context, arg CreateRegistered
 	return i, err
 }
 
+const createSession = `-- name: CreateSession :one
+INSERT INTO sessions (user_id, token_hash, expires_at)
+VALUES ($1, $2, $3)
+RETURNING id, user_id, token_hash, expires_at, created_at
+`
+
+type CreateSessionParams struct {
+	UserID    pgtype.UUID        `json:"user_id"`
+	TokenHash string             `json:"token_hash"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
+	row := q.db.QueryRow(ctx, createSession, arg.UserID, arg.TokenHash, arg.ExpiresAt)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const deleteSessionByTokenHash = `-- name: DeleteSessionByTokenHash :exec
+DELETE FROM sessions
+WHERE token_hash = $1
+`
+
+// Atomic logout (NFR-S2): delete by the hashed token directly so there is no
+// Get-then-Delete TOCTOU window.
+func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error {
+	_, err := q.db.Exec(ctx, deleteSessionByTokenHash, tokenHash)
+	return err
+}
+
 const getPermissionByCode = `-- name: GetPermissionByCode :one
 
 SELECT id, code, description
@@ -99,6 +136,49 @@ func (q *Queries) GetPermissionByCode(ctx context.Context, code string) (GetPerm
 	row := q.db.QueryRow(ctx, getPermissionByCode, code)
 	var i GetPermissionByCodeRow
 	err := row.Scan(&i.ID, &i.Code, &i.Description)
+	return i, err
+}
+
+const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
+SELECT s.id, s.user_id, s.token_hash, s.expires_at, s.created_at,
+       u.email, u.display_name, u.first_name, u.last_name, u.state, u.is_mfa_enabled, u.attributes
+FROM sessions s
+JOIN users u ON u.id = s.user_id
+WHERE s.token_hash = $1
+`
+
+type GetSessionByTokenHashRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	UserID       pgtype.UUID        `json:"user_id"`
+	TokenHash    string             `json:"token_hash"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	Email        string             `json:"email"`
+	DisplayName  string             `json:"display_name"`
+	FirstName    string             `json:"first_name"`
+	LastName     string             `json:"last_name"`
+	State        string             `json:"state"`
+	IsMfaEnabled bool               `json:"is_mfa_enabled"`
+	Attributes   []byte             `json:"attributes"`
+}
+
+func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error) {
+	row := q.db.QueryRow(ctx, getSessionByTokenHash, tokenHash)
+	var i GetSessionByTokenHashRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.Email,
+		&i.DisplayName,
+		&i.FirstName,
+		&i.LastName,
+		&i.State,
+		&i.IsMfaEnabled,
+		&i.Attributes,
+	)
 	return i, err
 }
 
@@ -174,6 +254,44 @@ func (q *Queries) ListPermissionGroupsByUser(ctx context.Context, userID pgtype.
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPermissionsByUser = `-- name: ListPermissionsByUser :many
+SELECT DISTINCT p.code
+FROM permissions p
+WHERE p.id IN (
+    SELECT pgp.permission_id
+    FROM user_permission_groups upg
+    JOIN permission_group_permissions pgp ON pgp.permission_group_id = upg.permission_group_id
+    WHERE upg.user_id = $1
+    UNION
+    SELECT up.permission_id
+    FROM user_permissions up
+    WHERE up.user_id = $1
+)
+ORDER BY p.code
+`
+
+// Resolved permission set (AD-12): additive union of permission-group
+// memberships plus direct grants. Deduplicated via DISTINCT.
+func (q *Queries) ListPermissionsByUser(ctx context.Context, userID pgtype.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, listPermissionsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return nil, err
+		}
+		items = append(items, code)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

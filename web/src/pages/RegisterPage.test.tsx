@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { RegisterPage } from './RegisterPage.tsx'
 import { ThemeProvider } from '../context/ThemeContext.tsx'
@@ -18,6 +18,10 @@ function renderRegisterPage() {
 describe('RegisterPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('HAPPY_PATH: renders registration form with all required inputs and links', () => {
@@ -94,14 +98,15 @@ describe('RegisterPage', () => {
 
   it('HAPPY_PATH: successful registration displays pending approval notice and confirmation links', async () => {
     const user = userEvent.setup()
-    global.fetch = vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({
         message: 'Wenn deine E-Mail bereits registriert ist, erhältst du eine Bestätigung.',
         status: 'pending_approval',
       }),
-    }) as unknown as Mock
+    })
+    vi.stubGlobal('fetch', fetchMock)
 
     renderRegisterPage()
 
@@ -126,7 +131,7 @@ describe('RegisterPage', () => {
     expect(screen.getByRole('link', { name: 'Zur Anmeldung' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Zurück zur Übersicht' })).toBeInTheDocument()
 
-    expect(global.fetch).toHaveBeenCalledWith('/api/v1/auth/register', {
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -141,14 +146,14 @@ describe('RegisterPage', () => {
 
   it('DUPLICATE_EMAIL: submitting duplicate email returns uniform confirmation without error', async () => {
     const user = userEvent.setup()
-    global.fetch = vi.fn().mockResolvedValue({
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({
         message: 'Wenn deine E-Mail bereits registriert ist, erhältst du eine Bestätigung.',
         status: 'pending_approval',
       }),
-    }) as unknown as Mock
+    }))
 
     renderRegisterPage()
 
@@ -170,7 +175,7 @@ describe('RegisterPage', () => {
 
   it('SERVER_ERROR: displays server error message when API fails', async () => {
     const user = userEvent.setup()
-    global.fetch = vi.fn().mockResolvedValue({
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 400,
       json: async () => ({
@@ -179,7 +184,7 @@ describe('RegisterPage', () => {
           message: 'Das Passwort muss mindestens 10 Zeichen lang sein.',
         },
       }),
-    }) as unknown as Mock
+    }))
 
     renderRegisterPage()
 
@@ -198,7 +203,7 @@ describe('RegisterPage', () => {
 
   it('NETWORK_ERROR: displays network error message when fetch throws', async () => {
     const user = userEvent.setup()
-    global.fetch = vi.fn().mockRejectedValue(new Error('Network error')) as unknown as Mock
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')))
 
     renderRegisterPage()
 

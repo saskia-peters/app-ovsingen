@@ -28,6 +28,17 @@ func WithAuth(h http.Handler) Option {
 	}
 }
 
+// WithProtected mounts a gateway-protected demo route at /api/v1/protected to
+// prove the auth-gateway middleware (AD-2/AD-6) rejects unauthenticated and
+// unauthorized callers with the uniform envelope.
+func WithProtected(h http.Handler) Option {
+	return func(r *chi.Mux) {
+		if h != nil {
+			r.Mount("/api/v1/protected", h)
+		}
+	}
+}
+
 // New returns the mounted chi router. The panic-recovery middleware and the
 // 404/405 handlers answer with the uniform JSON envelope (not plain text), and
 // /healthz is wired to the given Pinger with the structured request logger.

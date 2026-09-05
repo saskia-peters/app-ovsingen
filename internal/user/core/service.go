@@ -11,6 +11,7 @@ import (
 type Repository interface {
 	CreateRegisteredUser(ctx context.Context, email, displayName, firstName, lastName, passwordHash string) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	ListPermissionsByUser(ctx context.Context, userID string) ([]string, error)
 }
 
 // PasswordHasher defines the password hashing contract.
@@ -27,15 +28,17 @@ type RegisterResult struct {
 
 // Service provides User domain operations.
 type Service struct {
-	repo   Repository
-	hasher PasswordHasher
+	repo     Repository
+	hasher   PasswordHasher
+	sessions *SessionManager
 }
 
 // NewService constructs a User domain Service.
-func NewService(repo Repository, hasher PasswordHasher) *Service {
+func NewService(repo Repository, hasher PasswordHasher, sessions *SessionManager) *Service {
 	return &Service{
-		repo:   repo,
-		hasher: hasher,
+		repo:     repo,
+		hasher:   hasher,
+		sessions: sessions,
 	}
 }
 
