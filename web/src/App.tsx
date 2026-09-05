@@ -1,13 +1,29 @@
-// Minimal application shell (Story 1.1). The G.E.A.R. UI has no business
-// logic; server-side authorization is the only source of truth (AD-6) and
-// grows in with the dashboard story (1.2).
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { ThemeProvider } from './context/ThemeContext.tsx'
+import { ErrorBoundary } from './components/ErrorBoundary.tsx'
+import { DashboardPage } from './pages/DashboardPage.tsx'
+import { LoginPage } from './pages/LoginPage.tsx'
+import { NotFoundPage } from './pages/NotFoundPage.tsx'
+
+export function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<DashboardPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
+  )
+}
+
 function App() {
   return (
-    <main className="shell">
-      <h1>G.E.A.R.</h1>
-      <p className="tagline">Geräteverwaltung &amp; Einsatzbereitschaft</p>
-      <p className="muted">Das Dashboard folgt in Story 1.2.</p>
-    </main>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 

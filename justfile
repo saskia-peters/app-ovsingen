@@ -87,19 +87,21 @@ dev: web-deps db-up
 
 # Build all Go packages
 build:
-    go build ./...
+    go build ./cmd/... ./internal/...
 
-# Run all Go tests
+# Run all Go and web tests
 test:
-    go test ./...
+    go test ./cmd/... ./internal/...
+    npm --prefix web run test
 
 # Vet all Go packages
 vet:
-    go vet ./...
+    go vet ./cmd/... ./internal/...
 
-# Lint via pinned golangci-lint (runs vet first)
+# Lint Go (via pinned golangci-lint) and web (via eslint)
 lint: vet
-    go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{GOLANGCI_VERSION}} run ./...
+    go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{GOLANGCI_VERSION}} run ./cmd/... ./internal/...
+    npm --prefix web run lint
 
 # Regenerate per-module stores from migrations/ via pinned sqlc (config: sqlc.yaml)
 sqlc-generate:

@@ -1,0 +1,289 @@
+:root {
+  /* ==========================================================================
+     DESIGN.md Tokens: Colors (Brand, Status, Surface, Ink, Border)
+     ========================================================================== */
+
+  /* Brand Colors */
+  --gear-color-brand-blue: #003399;
+  --gear-color-brand-blue-dark: #002d88;
+  --gear-color-brand-navy: #001a66;
+  --gear-color-brand-navy-deep: #00124d;
+  --gear-color-brand-orange: #f5821f;
+  --gear-color-brand-blue-darkmode: #7aa2ff;
+  --gear-color-brand-navy-darkmode: #2a3f8f;
+  --gear-color-brand-navy-deep-darkmode: #0d1b4d;
+
+  /* Status Colors */
+  --gear-color-status-green: #2e7d32;
+  --gear-color-status-green-dark: #4caf50;
+  --gear-color-status-orange: #f5821f;
+  --gear-color-status-orange-dark: #ffa726;
+  --gear-color-status-red: #c62828;
+  --gear-color-status-red-dark: #ef5350;
+  --gear-color-status-oos: #1c1c1c;
+  --gear-color-status-oos-dark: #424242;
+
+  /* Surface Constants */
+  --gear-color-surface-base-light: #F5F6F8;
+  --gear-color-surface-raised-light: #FFFFFF;
+  --gear-color-surface-overlay-light: #FFFFFF;
+  --gear-color-surface-base-dark: #0F1729;
+  --gear-color-surface-raised-dark: #1A2340;
+  --gear-color-surface-overlay-dark: #1A2340;
+
+  /* Ink / Text Constants */
+  --gear-color-ink-primary-light: #1A1D23;
+  --gear-color-ink-secondary-light: #5A6070;
+  --gear-color-ink-disabled-light: #B0B5BF;
+  --gear-color-ink-on-brand-light: #FFFFFF;
+  --gear-color-ink-on-orange-light: #1A1D23;
+  --gear-color-ink-primary-dark: #E8EAF0;
+  --gear-color-ink-secondary-dark: #9BA0B0;
+  --gear-color-ink-disabled-dark: #4A5060;
+  --gear-color-ink-on-brand-dark: #0A0F1A;
+  --gear-color-ink-on-orange-dark: #1A1D23;
+
+  /* Border Constants */
+  --gear-color-border-hairline-light: #DDE0E6;
+  --gear-color-border-hairline-dark: #2A3050;
+
+  /* Elevation Shadows */
+  --gear-shadow-overlay-light: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --gear-shadow-overlay-dark: 0 4px 12px rgba(0, 0, 0, 0.4);
+
+  /* ==========================================================================
+     DESIGN.md Tokens: Typography Ramp (Inter / system-ui fallback)
+     ========================================================================== */
+  --gear-font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+
+  /* Display: 28px / 700 / 1.2 / -0.01em */
+  --gear-font-display-size: 28px;
+  --gear-font-display-weight: 700;
+  --gear-font-display-line-height: 1.2;
+  --gear-font-display-letter-spacing: -0.01em;
+
+  /* Title: 20px / 600 / 1.3 */
+  --gear-font-title-size: 20px;
+  --gear-font-title-weight: 600;
+  --gear-font-title-line-height: 1.3;
+
+  /* Body: 16px / 400 / 1.5 */
+  --gear-font-body-size: 16px;
+  --gear-font-body-weight: 400;
+  --gear-font-body-line-height: 1.5;
+
+  /* Meta: 13px / 400 / 1.4 */
+  --gear-font-meta-size: 13px;
+  --gear-font-meta-weight: 400;
+  --gear-font-meta-line-height: 1.4;
+
+  /* Label: 14px / 500 / 1.4 */
+  --gear-font-label-size: 14px;
+  --gear-font-label-weight: 500;
+  --gear-font-label-line-height: 1.4;
+
+  /* ==========================================================================
+     DESIGN.md Tokens: Corner Radii
+     ========================================================================== */
+  --gear-radius-sm: 4px;
+  --gear-radius-md: 8px;
+  --gear-radius-lg: 12px;
+  --gear-radius-xl: 16px;
+  --gear-radius-full: 9999px;
+  --gear-radius-default: 8px;
+
+  /* ==========================================================================
+     DESIGN.md Tokens: Spacing Scale (4px base grid)
+     ========================================================================== */
+  --gear-space-1: 4px;
+  --gear-space-2: 8px;
+  --gear-space-3: 12px;
+  --gear-space-4: 16px;
+  --gear-space-5: 20px;
+  --gear-space-6: 24px;
+  --gear-space-8: 32px;
+  --gear-space-10: 40px;
+  --gear-space-12: 48px;
+  --gear-space-gutter: 16px;
+  --gear-space-margin-mobile: 16px;
+
+  /* ==========================================================================
+     Semantic Theme Tokens: Default (Light Mode)
+     ========================================================================== */
+  --gear-color-brand: var(--gear-color-brand-blue);
+  --gear-color-brand-hover: var(--gear-color-brand-blue-dark);
+  --gear-color-brand-navy-current: var(--gear-color-brand-navy);
+  --gear-color-brand-navy-deep-current: var(--gear-color-brand-navy-deep);
+  --gear-color-brand-accent: var(--gear-color-brand-orange);
+
+  --gear-color-status-green-current: var(--gear-color-status-green);
+  --gear-color-status-orange-current: var(--gear-color-status-orange);
+  --gear-color-status-red-current: var(--gear-color-status-red);
+  --gear-color-status-oos-current: var(--gear-color-status-oos);
+
+  --gear-color-surface-base: var(--gear-color-surface-base-light);
+  --gear-color-surface-raised: var(--gear-color-surface-raised-light);
+  --gear-color-surface-overlay: var(--gear-color-surface-overlay-light);
+
+  --gear-color-ink-primary: var(--gear-color-ink-primary-light);
+  --gear-color-ink-secondary: var(--gear-color-ink-secondary-light);
+  --gear-color-ink-disabled: var(--gear-color-ink-disabled-light);
+  --gear-color-ink-on-brand: var(--gear-color-ink-on-brand-light);
+  --gear-color-ink-on-orange: var(--gear-color-ink-on-orange-light);
+
+  --gear-color-border-hairline: var(--gear-color-border-hairline-light);
+  --gear-shadow-overlay: var(--gear-shadow-overlay-light);
+
+  /* Component specific light-mode defaults */
+  --gear-color-button-primary-bg: var(--gear-color-brand-blue);
+  --gear-color-button-primary-text: var(--gear-color-ink-on-brand-light);
+  --gear-color-button-danger-bg: var(--gear-color-status-red);
+  --gear-color-button-danger-text: #FFFFFF;
+  --gear-color-pass-chip-bg: var(--gear-color-status-green);
+  --gear-color-pass-chip-text: #FFFFFF;
+  --gear-color-fail-chip-bg: var(--gear-color-status-red);
+  --gear-color-fail-chip-text: #FFFFFF;
+  --gear-color-input-bg: var(--gear-color-surface-raised);
+  --gear-color-input-border: var(--gear-color-border-hairline);
+  --gear-color-input-text: var(--gear-color-ink-primary);
+
+  --gear-color-filter-chip-bg: var(--gear-color-surface-base);
+  --gear-color-filter-chip-border: var(--gear-color-brand-blue);
+  --gear-color-filter-chip-text: var(--gear-color-brand-blue);
+  --gear-color-filter-chip-active-bg: var(--gear-color-brand-blue);
+  --gear-color-filter-chip-active-text: var(--gear-color-ink-on-brand-light);
+
+  --gear-color-header-bg: var(--gear-color-brand-navy);
+  --gear-color-header-text: #FFFFFF;
+}
+
+/* System Dark Mode (when not explicitly set to light) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --gear-color-brand: var(--gear-color-brand-blue-darkmode);
+    --gear-color-brand-hover: #98b7ff;
+    --gear-color-brand-navy-current: var(--gear-color-brand-navy-darkmode);
+    --gear-color-brand-navy-deep-current: var(--gear-color-brand-navy-deep-darkmode);
+
+    --gear-color-status-green-current: var(--gear-color-status-green-dark);
+    --gear-color-status-orange-current: var(--gear-color-status-orange-dark);
+    --gear-color-status-red-current: var(--gear-color-status-red-dark);
+    --gear-color-status-oos-current: var(--gear-color-status-oos-dark);
+
+    --gear-color-surface-base: var(--gear-color-surface-base-dark);
+    --gear-color-surface-raised: var(--gear-color-surface-raised-dark);
+    --gear-color-surface-overlay: var(--gear-color-surface-overlay-dark);
+
+    --gear-color-ink-primary: var(--gear-color-ink-primary-dark);
+    --gear-color-ink-secondary: var(--gear-color-ink-secondary-dark);
+    --gear-color-ink-disabled: var(--gear-color-ink-disabled-dark);
+    --gear-color-ink-on-brand: var(--gear-color-ink-on-brand-dark);
+    --gear-color-ink-on-orange: var(--gear-color-ink-on-orange-dark);
+
+    --gear-color-border-hairline: var(--gear-color-border-hairline-dark);
+    --gear-shadow-overlay: var(--gear-shadow-overlay-dark);
+
+    --gear-color-button-primary-bg: var(--gear-color-brand-blue-darkmode);
+    --gear-color-button-primary-text: var(--gear-color-ink-on-brand-dark);
+    --gear-color-button-danger-bg: var(--gear-color-status-red-dark);
+    --gear-color-button-danger-text: #FFFFFF;
+    --gear-color-pass-chip-bg: var(--gear-color-status-green-dark);
+    --gear-color-pass-chip-text: #FFFFFF;
+    --gear-color-fail-chip-bg: var(--gear-color-status-red-dark);
+    --gear-color-fail-chip-text: #FFFFFF;
+    --gear-color-input-bg: var(--gear-color-surface-raised-dark);
+    --gear-color-input-border: var(--gear-color-border-hairline-dark);
+    --gear-color-input-text: var(--gear-color-ink-primary-dark);
+
+    --gear-color-filter-chip-bg: var(--gear-color-surface-base-dark);
+    --gear-color-filter-chip-border: var(--gear-color-brand-blue-darkmode);
+    --gear-color-filter-chip-text: var(--gear-color-brand-blue-darkmode);
+    --gear-color-filter-chip-active-bg: var(--gear-color-brand-blue-darkmode);
+    --gear-color-filter-chip-active-text: var(--gear-color-ink-on-brand-dark);
+
+    --gear-color-header-bg: var(--gear-color-brand-navy-darkmode);
+    --gear-color-header-text: var(--gear-color-ink-primary-dark);
+  }
+}
+
+/* Explicit Dark Mode */
+[data-theme="dark"] {
+  --gear-color-brand: var(--gear-color-brand-blue-darkmode);
+  --gear-color-brand-hover: #98b7ff;
+  --gear-color-brand-navy-current: var(--gear-color-brand-navy-darkmode);
+  --gear-color-brand-navy-deep-current: var(--gear-color-brand-navy-deep-darkmode);
+
+  --gear-color-status-green-current: var(--gear-color-status-green-dark);
+  --gear-color-status-orange-current: var(--gear-color-status-orange-dark);
+  --gear-color-status-red-current: var(--gear-color-status-red-dark);
+  --gear-color-status-oos-current: var(--gear-color-status-oos-dark);
+
+  --gear-color-surface-base: var(--gear-color-surface-base-dark);
+  --gear-color-surface-raised: var(--gear-color-surface-raised-dark);
+  --gear-color-surface-overlay: var(--gear-color-surface-overlay-dark);
+
+  --gear-color-ink-primary: var(--gear-color-ink-primary-dark);
+  --gear-color-ink-secondary: var(--gear-color-ink-secondary-dark);
+  --gear-color-ink-disabled: var(--gear-color-ink-disabled-dark);
+  --gear-color-ink-on-brand: var(--gear-color-ink-on-brand-dark);
+  --gear-color-ink-on-orange: var(--gear-color-ink-on-orange-dark);
+
+  --gear-color-border-hairline: var(--gear-color-border-hairline-dark);
+  --gear-shadow-overlay: var(--gear-shadow-overlay-dark);
+
+  --gear-color-button-primary-bg: var(--gear-color-brand-blue-darkmode);
+  --gear-color-button-primary-text: var(--gear-color-ink-on-brand-dark);
+  --gear-color-button-danger-bg: var(--gear-color-status-red-dark);
+  --gear-color-button-danger-text: #FFFFFF;
+  --gear-color-pass-chip-bg: var(--gear-color-status-green-dark);
+  --gear-color-pass-chip-text: #FFFFFF;
+  --gear-color-fail-chip-bg: var(--gear-color-status-red-dark);
+  --gear-color-fail-chip-text: #FFFFFF;
+  --gear-color-input-bg: var(--gear-color-surface-raised-dark);
+  --gear-color-input-border: var(--gear-color-border-hairline-dark);
+  --gear-color-input-text: var(--gear-color-ink-primary-dark);
+
+  --gear-color-filter-chip-bg: var(--gear-color-surface-base-dark);
+  --gear-color-filter-chip-border: var(--gear-color-brand-blue-darkmode);
+  --gear-color-filter-chip-text: var(--gear-color-brand-blue-darkmode);
+  --gear-color-filter-chip-active-bg: var(--gear-color-brand-blue-darkmode);
+  --gear-color-filter-chip-active-text: var(--gear-color-ink-on-brand-dark);
+
+  --gear-color-header-bg: var(--gear-color-brand-navy-darkmode);
+  --gear-color-header-text: var(--gear-color-ink-primary-dark);
+}
+
+/* Explicit Light Mode */
+[data-theme="light"] {
+  --gear-color-brand: var(--gear-color-brand-blue);
+  --gear-color-brand-hover: var(--gear-color-brand-blue-dark);
+  --gear-color-brand-navy-current: var(--gear-color-brand-navy);
+  --gear-color-brand-navy-deep-current: var(--gear-color-brand-navy-deep);
+
+  --gear-color-status-green-current: var(--gear-color-status-green);
+  --gear-color-status-orange-current: var(--gear-color-status-orange);
+  --gear-color-status-red-current: var(--gear-color-status-red);
+  --gear-color-status-oos-current: var(--gear-color-status-oos);
+
+  --gear-color-surface-base: var(--gear-color-surface-base-light);
+  --gear-color-surface-raised: var(--gear-color-surface-raised-light);
+  --gear-color-surface-overlay: var(--gear-color-surface-overlay-light);
+
+  --gear-color-ink-primary: var(--gear-color-ink-primary-light);
+  --gear-color-ink-secondary: var(--gear-color-ink-secondary-light);
+  --gear-color-ink-disabled: var(--gear-color-ink-disabled-light);
+  --gear-color-ink-on-brand: var(--gear-color-ink-on-brand-light);
+  --gear-color-ink-on-orange: var(--gear-color-ink-on-orange-light);
+
+  --gear-color-border-hairline: var(--gear-color-border-hairline-light);
+  --gear-shadow-overlay: var(--gear-shadow-overlay-light);
+
+  --gear-color-filter-chip-bg: var(--gear-color-surface-base-light);
+  --gear-color-filter-chip-border: var(--gear-color-brand-blue);
+  --gear-color-filter-chip-text: var(--gear-color-brand-blue);
+  --gear-color-filter-chip-active-bg: var(--gear-color-brand-blue);
+  --gear-color-filter-chip-active-text: var(--gear-color-ink-on-brand-light);
+
+  --gear-color-header-bg: var(--gear-color-brand-navy);
+  --gear-color-header-text: #FFFFFF;
+}
