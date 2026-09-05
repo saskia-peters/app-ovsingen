@@ -16,7 +16,6 @@ describe('App & Dashboard Foundation', () => {
 
     // Header & Brand
     expect(screen.getByRole('heading', { level: 1, name: 'G.E.A.R.' })).toBeInTheDocument()
-    expect(screen.getByText('Ortsverband Singen')).toBeInTheDocument()
 
     // Page Title
     expect(screen.getByRole('heading', { level: 2, name: 'Übersicht' })).toBeInTheDocument()

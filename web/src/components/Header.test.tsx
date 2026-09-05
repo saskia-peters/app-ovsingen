@@ -10,7 +10,7 @@ describe('Header', () => {
     document.documentElement.removeAttribute('data-theme')
   })
 
-  it('renders G.E.A.R. branding and Ortsverband Singen identifier', () => {
+  it('renders G.E.A.R. branding', () => {
     render(
       <ThemeProvider>
         <Header />
@@ -18,7 +18,6 @@ describe('Header', () => {
     )
 
     expect(screen.getByRole('heading', { level: 1, name: 'G.E.A.R.' })).toBeInTheDocument()
-    expect(screen.getByText('Ortsverband Singen')).toBeInTheDocument()
   })
 
   it('toggles light/dark theme when theme button is clicked', async () => {

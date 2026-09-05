@@ -64,6 +64,9 @@ db-up: migrate-up
 db-down: podman-check
     podman compose down
 
+alias db-stop := db-down
+alias db-shutdown := db-down
+
 # Apply pending forward migrations
 migrate-up: db-wait
     go run -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@{{MIGRATE_VERSION}} -path ./migrations --database "{{DATABASE_URL}}" up

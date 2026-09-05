@@ -12,7 +12,6 @@ export function Header() {
       <div className={styles.headerInner}>
         <div className={styles.brandGroup}>
           <h1 className={styles.title}>G.E.A.R.</h1>
-          <span className={styles.badge}>Ortsverband Singen</span>
         </div>
         <button
           type="button"
