@@ -10,7 +10,7 @@ This document outlines the scope, objectives, and requirements for the **G.E.A.R
 
 ## 1. Overview & Objectives
 
-In the German Federal Agency for Technical Relief (THW) Ortsverband Singen, maintaining operational readiness of tools and equipment is critical. This app aims to modernize and streamline tool inspections, ensuring that inspections are completed on time by qualified personnel and that administrators can easily monitor status.
+In the Ortsverband Singen, maintaining operational readiness of tools and equipment is critical. This app aims to modernize and streamline tool inspections, ensuring that inspections are completed on time by qualified personnel and that administrators can easily monitor status.
 
 ### Strategic Goals
 * **Operational Readiness**: Real-time tracking of tool inspection status to prevent out-of-date equipment usage.
@@ -79,7 +79,7 @@ In the German Federal Agency for Technical Relief (THW) Ortsverband Singen, main
 
 ## 5. Non-Goals (Out of Scope for V1)
 
-* **External Integrations**: No direct API integration with external THW tools (e.g., Helferportal, Hermine, Extranet).
+* **External Integrations**: No direct API integration with external third-party tools (e.g., Helferportal, Hermine, Extranet).
 * **Tool Reservations**: No booking, checkout, or reservation features.
 * **Repair & Issues Tracking**: No workflow for tracking external repair tasks or parts ordering.
 * **Automated Alerting**: No email or push notifications for upcoming/expired inspections (visual dashboard alerts only).

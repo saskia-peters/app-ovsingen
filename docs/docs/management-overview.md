@@ -164,7 +164,7 @@ An inspection is either a simple **pass/fail** check or a **checklist** of indiv
 | Self-service password mgmt: change own password, forgot-password reset, dual-control admin recovery, admin-configurable email delivery, backup destinations & schedule catalog | Repair tracking and logs |
 | Tool & tool-type catalog | Repair tracking and logs |
 | Qualification-gated inspections (pass/fail + checklist) | Automated notifications |
-| Status dashboard with traffic-light | Integration with external THW systems |
+| Status dashboard with traffic-light | Integration with external third-party systems |
 | Inspection history & PDF reports | |
 
 Out-of-scope items are candidates for later versions — the architecture is deliberately built so they can be added without reworking what exists.

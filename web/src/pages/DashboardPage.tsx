@@ -16,7 +16,7 @@ export function DashboardPage() {
         <section className={styles.titleSection}>
           <h2 className={styles.pageTitle}>Übersicht</h2>
           <p className={styles.pageSubtitle}>
-            Geräteverwaltung &amp; Einsatzbereitschaft
+            G.E.A.R. (Geräte-Einsatz-Assistenz &amp; Readiness) — Geräteverwaltung &amp; Einsatzbereitschaft
           </p>
         </section>
 

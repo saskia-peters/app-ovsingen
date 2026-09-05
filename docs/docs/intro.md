@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # G.E.A.R. — Documentation
 
-The **G.E.A.R.** modernizes and centralizes the operational equipment management of the Ortsverband Singen: a modularized web application for mobile and desktop devices.
+**G.E.A.R.** (Geräte-Einsatz-Assistenz & Readiness) modernizes and centralizes the operational equipment management of the Ortsverband Singen: a modularized web application for mobile and desktop devices.
 
 This documentation site is generated from the BMad planning artifacts (PRD, product brief, architecture spine) and will grow with the project: API contracts and module integration points are published here per NFR-M4.
 

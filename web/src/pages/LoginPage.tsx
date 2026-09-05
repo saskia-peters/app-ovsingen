@@ -107,7 +107,7 @@ export function LoginPage() {
         <div className={styles.card}>
           <h2 className={styles.title}>Anmeldung</h2>
           <p className={styles.subtitle}>
-            Melde dich an, um auf die Geräteverwaltung zuzugreifen.
+            G.E.A.R. (Geräte-Einsatz-Assistenz &amp; Readiness) — melde dich an, um auf die Geräteverwaltung zuzugreifen.
           </p>
 
           {errors.general && (

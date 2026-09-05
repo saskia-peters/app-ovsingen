@@ -11,7 +11,7 @@ updated: 2026-08-29
 This Product Requirement Document (PRD) defines the scope, functional requirements, and non-functional guidelines for the first release (V1) of the **G.E.A.R.** It is designed for product managers, system architects, software developers, and quality assurance engineers to guide design, implementation, and verification. The document is structured with glossary-anchored terms, globally numbered functional requirements, inline assumptions (indexed in Section 9), and explicit MVP boundaries. This V1 specification builds directly on the initial [Product Brief](file:///home/saskia/devprojects/gear/_bmad-output/planning-artifacts/briefs/brief-app-ovsingen-2026-08-29/brief.md).
 
 ## 1. Vision
-In the German Federal Agency for Technical Relief (THW) Ortsverband Singen, the operational readiness of specialized tools and equipment is a matter of life-saving importance. Yet, managing periodic equipment inspections, verifying personnel qualifications (such as chainsaw or generator operation), and tracking tool statuses has historically been manual and fragmented. The **G.E.A.R.** modernizes and centralizes this process, ensuring that every tool in the Ortsverband is inspected on time, by qualified volunteers, with transparent and immediate tracking.
+In the Ortsverband Singen, the operational readiness of specialized tools and equipment is a matter of life-saving importance. Yet, managing periodic equipment inspections, verifying personnel qualifications (such as chainsaw or generator operation), and tracking tool statuses has historically been manual and fragmented. The **G.E.A.R.** modernizes and centralizes this process, ensuring that every tool in the Ortsverband is inspected on time, by qualified volunteers, with transparent and immediate tracking.
 
 Crucially, the tool maintenance module is only the first component of a broader, extensible **G.E.A.R. Ecosystem**. The application's architecture is designed from day one with a strict focus on **modularization** and decoupling. The user management directory, authorization framework, and shared data persistence layers are built as a standalone, reusable foundation. This ensures that future Ortsverband modules (e.g., event scheduling, vehicle logs, or operational reporting) can be seamlessly integrated into the ecosystem without refactoring the core directory.
 
@@ -34,7 +34,7 @@ For volunteers (**Helfer*in**), it offers a simple, mobile-friendly interface to
   * *Emotional:* Feel confident the equipment he is responsible for is fully catalogued, inspected on time, and documented for the Ortsverband.
 
 ### 2.2 Non-Users (V1)
-* **External THW Members:** Members of other Ortsverbände (outside of Singen) are out of scope for V1.
+* **External Members:** Members of other Ortsverbände (outside of Singen) are out of scope for V1.
 * **External Repair Contractors:** The application does not handle tracking or direct communication with external service technicians.
 * **Public / Unauthenticated Users:** Anyone without an approved, authenticated account is barred from accessing the directories or status dashboards.
 
@@ -351,7 +351,7 @@ Administrators manage a **named schedule catalog** directly in the admin interfa
 * **NFR-PL2: Form Factor** — The application is a responsive web application supporting mobile, tablet, and desktop. No native app is required for V1.
 
 ## 5. Non-Goals (Explicit)
-* **No external system integrations:** No API connections to Helferportal, Hermine, THW Extranet, or any other external THW digital systems in V1.
+* **No external system integrations:** No API connections to Helferportal, Hermine, Extranet, or any other external third-party digital systems in V1.
 * **No tool reservations or booking:** The app does not support tool checkout, booking, or reservation workflows.
 * **No repair & issues tracking:** No workflow for logging external repair tasks, ordering spare parts, or tracking a tool's service history beyond inspection records.
 * **No automated alerting:** No email or push notifications for upcoming or overdue inspections. Status visibility is provided exclusively through the color-coded Status Dashboard. *(The single, self-service **transactional** account-recovery email in FR-26 is in scope and does not reopen this non-goal — it is triggered only by an explicit user action, never automatically.)*
@@ -370,7 +370,7 @@ Administrators manage a **named schedule catalog** directly in the admin interfa
 
 ### 6.2 Out of Scope for MVP
 * Future ecosystem modules (vehicle logs, event scheduling, operational reporting, etc.) — deferred to V2+.
-* External API integrations — deferred to V2+. `[NOTE FOR PM]` If THW Helferportal integration becomes a strategic priority, this could move forward.
+* External API integrations — deferred to V2+. `[NOTE FOR PM]` If Helferportal integration becomes a strategic priority, this could move forward.
 * Automated email/push notifications — deferred to V2+. *(The transactional account-recovery email for FR-26 is in scope and separate from automated notifications.)*
 * Tool reservations, repair tracking — explicitly out of scope (see §5).
 
