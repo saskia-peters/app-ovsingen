@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Header } from '../components/Header.tsx'
 import { SummaryGrid } from '../components/SummaryGrid.tsx'
 import { FilterChips } from '../components/FilterChips.tsx'
@@ -18,6 +19,9 @@ export function DashboardPage() {
           <p className={styles.pageSubtitle}>
             G.E.A.R. (Geräte-Einsatz-Assistenz &amp; Readiness) — Geräteverwaltung &amp; Einsatzbereitschaft
           </p>
+          <Link to="/mfa" className={styles.mfaLink}>
+            Zwei-Faktor-Authentifizierung verwalten
+          </Link>
         </section>
 
         <SummaryGrid />

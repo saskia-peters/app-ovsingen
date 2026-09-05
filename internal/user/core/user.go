@@ -53,9 +53,19 @@ type User struct {
 	PasswordHash string         `json:"-"`
 	State        UserState      `json:"state"`
 	IsMFAEnabled bool           `json:"is_mfa_enabled"`
-	Attributes   map[string]any `json:"attributes,omitempty"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
+	// TotpSecretEncrypted holds the AES-256-GCM ciphertext of the TOTP shared
+	// secret (NFR-S4). Never serialized to clients (json:"-") and never the
+	// plaintext secret.
+	TotpSecretEncrypted string `json:"-"`
+	// PendingTotpSecretEncrypted and PendingTotpExpiresAt hold the short-lived
+	// enrollment secret (encrypted at rest) and its expiry (FR-4). The confirm
+	// step validates a code against this server-issued secret. Never serialized
+	// to clients (json:"-") and never the plaintext secret.
+	PendingTotpSecretEncrypted string    `json:"-"`
+	PendingTotpExpiresAt       time.Time `json:"-"`
+	Attributes                 map[string]any `json:"attributes,omitempty"`
+	CreatedAt                  time.Time      `json:"created_at"`
+	UpdatedAt                  time.Time      `json:"updated_at"`
 }
 
 // RegisterInput captures the user self-registration payload.

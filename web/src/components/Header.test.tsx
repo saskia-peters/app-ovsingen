@@ -41,4 +41,24 @@ describe('Header', () => {
     await user.click(screen.getByRole('button', { name: /hellmodus/i }))
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
   })
+
+  it('MFA_ACTIVE: shows the "MFA aktiv" badge when the auth state says MFA is enabled', () => {
+    localStorage.setItem('gear.is_mfa_enabled', 'true')
+    render(
+      <ThemeProvider>
+        <Header />
+      </ThemeProvider>,
+    )
+    expect(screen.getByText('MFA aktiv')).toBeInTheDocument()
+  })
+
+  it('MFA_INACTIVE: hides the badge when MFA is not enabled', () => {
+    localStorage.clear()
+    render(
+      <ThemeProvider>
+        <Header />
+      </ThemeProvider>,
+    )
+    expect(screen.queryByText('MFA aktiv')).not.toBeInTheDocument()
+  })
 })

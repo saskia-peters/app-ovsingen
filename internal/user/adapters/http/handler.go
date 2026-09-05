@@ -19,24 +19,34 @@ import (
 
 // Handler serves HTTP requests for authentication and user registration.
 type Handler struct {
-	service ports.Service
-	logger  *slog.Logger
+	service   ports.Service
+	logger    *slog.Logger
+	validator auth.SessionValidator
 }
 
-// NewHandler constructs a User HTTP handler.
-func NewHandler(service ports.Service, logger *slog.Logger) *Handler {
+// NewHandler constructs a User HTTP handler. validator is used to authenticate
+// the MFA management endpoints (which require an authenticated user).
+func NewHandler(service ports.Service, logger *slog.Logger, validator auth.SessionValidator) *Handler {
 	return &Handler{
-		service: service,
-		logger:  logger,
+		service:   service,
+		logger:    logger,
+		validator: validator,
 	}
 }
 
-// Routes returns a chi.Router with all auth routes mounted.
+// Routes returns a chi.Router with all auth routes mounted. The MFA management
+// routes require an authenticated bearer session.
 func (h *Handler) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Post("/register", h.Register)
 	r.Post("/login", h.Login)
 	r.Post("/logout", h.Logout)
+	r.Group(func(r chi.Router) {
+		r.Use(auth.RequireAuth(h.validator))
+		r.Get("/mfa/status", h.MFAStatus)
+		r.Post("/mfa/enroll", h.MFAEnroll)
+		r.Post("/mfa/disable", h.MFADisable)
+	})
 	return r
 }
 
@@ -109,7 +119,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("Zu viele Fehlversuche. Bitte warte %d Sekunden.", seconds))
 		case errors.Is(err, core.ErrInvalidCredentials):
 			// Anti-enumeration: identical response for every failure (UX-DR7).
+			// Failed-login logging is UNIFORM (review finding 1.6-4): the same
+			// event is emitted for a wrong password, an unknown email, a
+			// non-active account and a failed TOTP challenge, so log readers
+			// cannot tell which stage failed (NFR-O1).
+			h.logger.Warn("login failed", "email", input.Email)
 			httpapi.WriteError(w, http.StatusUnauthorized, "invalid_credentials", "E-Mail oder Passwort ist falsch.")
+		case errors.Is(err, core.ErrMFAUnavailable):
+			// Encryption key missing/invalid/rotated during the TOTP step
+			// (NFR-S4): a clear, distinct message is returned while the real
+			// cause is logged (review finding 1.6-3).
+			h.logger.Error("mfa unavailable during login", "error", err)
+			httpapi.WriteError(w, http.StatusServiceUnavailable, "mfa_unavailable", "MFA ist derzeit nicht verfügbar.")
 		case errors.Is(err, core.ErrInvalidLoginInput):
 			// Oversized email/password rejected before the Argon2id verify.
 			httpapi.WriteError(w, http.StatusBadRequest, "invalid_request", core.MsgInvalidLoginInput)
@@ -120,6 +141,20 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if res.MFARequired {
+		// Two-step login (FR-4): valid password but MFA is enabled and no TOTP
+		// code yet — issue NO session, signal the challenge.
+		h.logger.Info("mfa challenge issued", "email", input.Email)
+		httpapi.WriteJSON(w, http.StatusOK, map[string]any{"mfa_required": true})
+		return
+	}
+
+	// The challenge-success event only fires when MFA was actually involved
+	// (review finding 1.6-11): a spurious totp_code on an account without MFA
+	// must not be logged as an MFA challenge success.
+	if input.TotpCode != "" && res.User.IsMFAEnabled {
+		h.logger.Info("mfa challenge success", "email", input.Email)
+	}
 	httpapi.WriteJSON(w, http.StatusOK, res)
 }
 
@@ -134,4 +169,149 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// mfaEnrollRequest is the body of POST /api/v1/auth/mfa/enroll.
+// With no code it is an enrollment REQUEST (returns secret + URI); with a code
+// (plus the server-issued secret) it CONFIRMS and enables MFA (FR-4). The
+// confirm step validates the code against the SERVER-persisted pending secret;
+// a client-supplied secret that does not match it is rejected (review finding
+// 1.6-1).
+type mfaEnrollRequest struct {
+	Code   string `json:"code,omitempty"`
+	Secret string `json:"secret,omitempty"`
+}
+
+// MFAStatus handles GET /api/v1/auth/mfa/status for an authenticated user. It
+// reports whether MFA is currently enabled so the SPA can branch the settings
+// surface and show the "MFA aktiv" indicator (UX-DR6).
+func (h *Handler) MFAStatus(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFrom(r.Context())
+	if user == nil {
+		httpapi.WriteError(w, http.StatusUnauthorized, "unauthorized", "Authentifizierung erforderlich.")
+		return
+	}
+	enabled, err := h.service.MFAStatus(r.Context(), user)
+	if err != nil {
+		h.logger.Error("mfa status failed unexpectedly", "error", err)
+		httpapi.WriteError(w, http.StatusInternalServerError, "internal_error", "Ein interner Fehler ist aufgetreten.")
+		return
+	}
+	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"enabled": enabled})
+}
+
+// MFAEnroll handles POST /api/v1/auth/mfa/enroll for an authenticated user.
+// - request (no code): returns a fresh shared secret + otpauth provisioning URI
+// - confirm (code + secret): validates the 6-digit code against the server's
+//   pending enrollment, then promotes the encrypted secret, enabling MFA
+// The secret is shown once at request and stored encrypted at rest (NFR-S4).
+func (h *Handler) MFAEnroll(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	var input mfaEnrollRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		httpapi.WriteError(w, http.StatusBadRequest, "invalid_request", "Ungültiges JSON-Format.")
+		return
+	}
+	user := auth.UserFrom(r.Context())
+	if user == nil {
+		httpapi.WriteError(w, http.StatusUnauthorized, "unauthorized", "Authentifizierung erforderlich.")
+		return
+	}
+
+	// Confirm step.
+	if input.Code != "" {
+		if err := h.service.ConfirmMFAEnable(r.Context(), user, input.Secret, input.Code); err != nil {
+			switch {
+			case errors.Is(err, core.ErrTOTPInvalid):
+				h.logger.Warn("mfa enroll confirm failed", "email", user.Email)
+				httpapi.WriteError(w, http.StatusBadRequest, "invalid_totp", "Der Bestätigungscode ist ungültig oder abgelaufen.")
+			case errors.Is(err, core.ErrMFAEnrollmentExpired):
+				h.logger.Warn("mfa enroll confirm expired", "email", user.Email)
+				httpapi.WriteError(w, http.StatusBadRequest, "invalid_totp", "Die Aktivierung ist abgelaufen. Bitte starte die Aktivierung erneut.")
+			case errors.Is(err, core.ErrMFAAlreadyEnabled):
+				httpapi.WriteError(w, http.StatusBadRequest, "invalid_request", "Zwei-Faktor-Authentifizierung ist bereits aktiviert.")
+			case errors.Is(err, core.ErrMFAUnavailable):
+				// Encryption key missing/invalid/rotated (NFR-S4): a clear,
+				// distinct message is returned while the real cause is logged.
+				h.logger.Error("mfa unavailable during enroll confirm", "error", err)
+				httpapi.WriteError(w, http.StatusServiceUnavailable, "mfa_unavailable", "MFA ist derzeit nicht verfügbar.")
+			default:
+				h.logger.Error("mfa enroll confirm failed unexpectedly", "error", err)
+				httpapi.WriteError(w, http.StatusInternalServerError, "internal_error", "Ein interner Fehler ist aufgetreten.")
+			}
+			return
+		}
+		h.logger.Info("mfa enroll confirmed", "email", user.Email)
+		// Sessions issued before enrollment must not bypass the second factor
+		// (review finding 1.6-2): revoke all other sessions.
+		if err := h.service.RevokeOtherSessions(r.Context(), user.ID, auth.BearerToken(r)); err != nil {
+			h.logger.Error("mfa enroll session revocation failed", "error", err)
+		}
+		httpapi.WriteJSON(w, http.StatusOK, map[string]any{"enabled": true})
+		return
+	}
+
+	// Request step: generate a fresh secret + provisioning URI.
+	res, err := h.service.EnrollMFARequest(r.Context(), user)
+	if err != nil {
+		switch {
+		case errors.Is(err, core.ErrMFAAlreadyEnabled):
+			httpapi.WriteError(w, http.StatusBadRequest, "invalid_request", "Zwei-Faktor-Authentifizierung ist bereits aktiviert.")
+		case errors.Is(err, core.ErrMFAUnavailable):
+			h.logger.Error("mfa unavailable during enroll request", "error", err)
+			httpapi.WriteError(w, http.StatusServiceUnavailable, "mfa_unavailable", "MFA ist derzeit nicht verfügbar.")
+		default:
+			h.logger.Error("mfa enroll request failed unexpectedly", "error", err)
+			httpapi.WriteError(w, http.StatusInternalServerError, "internal_error", "Ein interner Fehler ist aufgetreten.")
+		}
+		return
+	}
+	h.logger.Info("mfa enroll requested", "email", user.Email)
+	httpapi.WriteJSON(w, http.StatusOK, res)
+}
+
+// mfaDisableRequest is the body of POST /api/v1/auth/mfa/disable: the caller's
+// current 6-digit TOTP code (FR-4).
+type mfaDisableRequest struct {
+	Code string `json:"code"`
+}
+
+// MFADisable handles POST /api/v1/auth/mfa/disable for an authenticated user.
+// It requires a valid current TOTP code before clearing the stored secret.
+func (h *Handler) MFADisable(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	var input mfaDisableRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		httpapi.WriteError(w, http.StatusBadRequest, "invalid_request", "Ungültiges JSON-Format.")
+		return
+	}
+	user := auth.UserFrom(r.Context())
+	if user == nil {
+		httpapi.WriteError(w, http.StatusUnauthorized, "unauthorized", "Authentifizierung erforderlich.")
+		return
+	}
+
+	if err := h.service.DisableMFA(r.Context(), user, input.Code); err != nil {
+		switch {
+		case errors.Is(err, core.ErrTOTPInvalid):
+			h.logger.Warn("mfa disable failed", "email", user.Email)
+			httpapi.WriteError(w, http.StatusBadRequest, "invalid_totp", "Der Bestätigungscode ist ungültig oder abgelaufen.")
+		case errors.Is(err, core.ErrMFANotEnabled):
+			httpapi.WriteError(w, http.StatusBadRequest, "invalid_request", "Zwei-Faktor-Authentifizierung ist nicht aktiviert.")
+		case errors.Is(err, core.ErrMFAUnavailable):
+			h.logger.Error("mfa unavailable during disable", "error", err)
+			httpapi.WriteError(w, http.StatusServiceUnavailable, "mfa_unavailable", "MFA ist derzeit nicht verfügbar.")
+		default:
+			h.logger.Error("mfa disable failed unexpectedly", "error", err)
+			httpapi.WriteError(w, http.StatusInternalServerError, "internal_error", "Ein interner Fehler ist aufgetreten.")
+		}
+		return
+	}
+	h.logger.Info("mfa disable succeeded", "email", user.Email)
+	// After disabling MFA all pre-existing sessions must re-authenticate
+	// (review finding 1.6-2): revoke every session of the user.
+	if err := h.service.RevokeAllSessions(r.Context(), user.ID); err != nil {
+		h.logger.Error("mfa disable session revocation failed", "error", err)
+	}
+	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"enabled": false})
 }

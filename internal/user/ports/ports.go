@@ -4,6 +4,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/saskia-peters/gear/internal/user/core"
 )
@@ -19,6 +20,16 @@ type Service interface {
 	Register(ctx context.Context, input core.RegisterInput) (*core.RegisterResult, error)
 	Login(ctx context.Context, input core.LoginInput) (*core.LoginResult, error)
 	Logout(ctx context.Context, rawToken string) error
+	// TOTP MFA (FR-4): enroll request/confirm and disable, all acting on the
+	// authenticated user.
+	EnrollMFARequest(ctx context.Context, user *core.User) (*core.MFAEnrollResult, error)
+	ConfirmMFAEnable(ctx context.Context, user *core.User, secret, code string) error
+	DisableMFA(ctx context.Context, user *core.User, code string) error
+	MFAStatus(ctx context.Context, user *core.User) (bool, error)
+	// RevokeOtherSessions/RevokeAllSessions invalidate the user's sessions when
+	// MFA is enabled or disabled (review finding 1.6-2).
+	RevokeOtherSessions(ctx context.Context, userID, rawToken string) error
+	RevokeAllSessions(ctx context.Context, userID string) error
 }
 
 // Repository is the outbound persistence port for User data.
@@ -29,10 +40,20 @@ type Repository interface {
 	GetLoginAttempts(ctx context.Context, email string) (*core.LoginAttempts, error)
 	IncrementLoginAttempts(ctx context.Context, email string) error
 	ClearLoginAttempts(ctx context.Context, email string) error
+	SetUserTotpSecret(ctx context.Context, userID, encryptedSecret string) error
+	ClearUserTotpSecret(ctx context.Context, userID string) error
+	SetUserPendingTotpSecret(ctx context.Context, userID, encryptedSecret string, expiresAt time.Time) error
+	ClearUserPendingTotpSecret(ctx context.Context, userID string) error
 }
 
 // PasswordHasher is the outbound password hashing port (AD-13).
 type PasswordHasher interface {
 	Hash(password string) (string, error)
 	Verify(password, encodedHash string) (bool, error)
+}
+
+// SecretCipher is the outbound TOTP secret encryption port (NFR-S4).
+type SecretCipher interface {
+	Encrypt(plaintext string) (string, error)
+	Decrypt(encoded string) (string, error)
 }

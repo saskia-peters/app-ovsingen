@@ -22,6 +22,37 @@ func (q *Queries) ClearLoginAttempts(ctx context.Context, email string) error {
 	return err
 }
 
+const clearUserPendingTotpSecret = `-- name: ClearUserPendingTotpSecret :exec
+UPDATE users
+SET pending_totp_secret_encrypted = NULL,
+    pending_totp_expires_at       = NULL,
+    updated_at                    = now()
+WHERE id = $1
+`
+
+// Clear a pending TOTP enrollment after the confirm step (success or failure).
+func (q *Queries) ClearUserPendingTotpSecret(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, clearUserPendingTotpSecret, id)
+	return err
+}
+
+const clearUserTotpSecret = `-- name: ClearUserTotpSecret :exec
+UPDATE users
+SET totp_secret_encrypted         = NULL,
+    is_mfa_enabled                = false,
+    pending_totp_secret_encrypted = NULL,
+    pending_totp_expires_at       = NULL,
+    updated_at                    = now()
+WHERE id = $1
+`
+
+// Disable TOTP MFA (FR-4): clear the stored encrypted secret, the flag and any
+// pending enrollment.
+func (q *Queries) ClearUserTotpSecret(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, clearUserTotpSecret, id)
+	return err
+}
+
 const createRegisteredUser = `-- name: CreateRegisteredUser :one
 INSERT INTO users (
     email,
@@ -38,7 +69,7 @@ INSERT INTO users (
     $5,
     'pending_approval'
 )
-RETURNING id, email, display_name, first_name, last_name, password_hash, state, is_mfa_enabled, attributes, created_at, updated_at
+RETURNING id, email, display_name, first_name, last_name, password_hash, state, is_mfa_enabled, totp_secret_encrypted, pending_totp_secret_encrypted, pending_totp_expires_at, attributes, created_at, updated_at
 `
 
 type CreateRegisteredUserParams struct {
@@ -50,17 +81,20 @@ type CreateRegisteredUserParams struct {
 }
 
 type CreateRegisteredUserRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Email        string             `json:"email"`
-	DisplayName  string             `json:"display_name"`
-	FirstName    string             `json:"first_name"`
-	LastName     string             `json:"last_name"`
-	PasswordHash string             `json:"password_hash"`
-	State        string             `json:"state"`
-	IsMfaEnabled bool               `json:"is_mfa_enabled"`
-	Attributes   []byte             `json:"attributes"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID                         pgtype.UUID        `json:"id"`
+	Email                      string             `json:"email"`
+	DisplayName                string             `json:"display_name"`
+	FirstName                  string             `json:"first_name"`
+	LastName                   string             `json:"last_name"`
+	PasswordHash               string             `json:"password_hash"`
+	State                      string             `json:"state"`
+	IsMfaEnabled               bool               `json:"is_mfa_enabled"`
+	TotpSecretEncrypted        pgtype.Text        `json:"totp_secret_encrypted"`
+	PendingTotpSecretEncrypted pgtype.Text        `json:"pending_totp_secret_encrypted"`
+	PendingTotpExpiresAt       pgtype.Timestamptz `json:"pending_totp_expires_at"`
+	Attributes                 []byte             `json:"attributes"`
+	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) CreateRegisteredUser(ctx context.Context, arg CreateRegisteredUserParams) (CreateRegisteredUserRow, error) {
@@ -81,6 +115,9 @@ func (q *Queries) CreateRegisteredUser(ctx context.Context, arg CreateRegistered
 		&i.PasswordHash,
 		&i.State,
 		&i.IsMfaEnabled,
+		&i.TotpSecretEncrypted,
+		&i.PendingTotpSecretEncrypted,
+		&i.PendingTotpExpiresAt,
 		&i.Attributes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -122,6 +159,36 @@ WHERE token_hash = $1
 // Get-then-Delete TOCTOU window.
 func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error {
 	_, err := q.db.Exec(ctx, deleteSessionByTokenHash, tokenHash)
+	return err
+}
+
+const deleteSessionsByUser = `-- name: DeleteSessionsByUser :exec
+DELETE FROM sessions
+WHERE user_id = $1
+`
+
+// Revoke every session of a user (NFR-S2). Used when MFA is disabled so all
+// pre-existing sessions must re-authenticate (review finding 1.6-2).
+func (q *Queries) DeleteSessionsByUser(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteSessionsByUser, userID)
+	return err
+}
+
+const deleteSessionsByUserExcept = `-- name: DeleteSessionsByUserExcept :exec
+DELETE FROM sessions
+WHERE user_id = $1 AND token_hash <> $2
+`
+
+type DeleteSessionsByUserExceptParams struct {
+	UserID    pgtype.UUID `json:"user_id"`
+	TokenHash string      `json:"token_hash"`
+}
+
+// Revoke all of a user's sessions except the one identified by the given token
+// hash. Used when MFA is enabled so sessions issued before enrollment cannot
+// bypass the new second factor (review finding 1.6-2).
+func (q *Queries) DeleteSessionsByUserExcept(ctx context.Context, arg DeleteSessionsByUserExceptParams) error {
+	_, err := q.db.Exec(ctx, deleteSessionsByUserExcept, arg.UserID, arg.TokenHash)
 	return err
 }
 
@@ -170,25 +237,28 @@ func (q *Queries) GetPermissionByCode(ctx context.Context, code string) (GetPerm
 
 const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
 SELECT s.id, s.user_id, s.token_hash, s.expires_at, s.created_at,
-       u.email, u.display_name, u.first_name, u.last_name, u.state, u.is_mfa_enabled, u.attributes
+       u.email, u.display_name, u.first_name, u.last_name, u.state, u.is_mfa_enabled, u.totp_secret_encrypted, u.pending_totp_secret_encrypted, u.pending_totp_expires_at, u.attributes
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = $1
 `
 
 type GetSessionByTokenHashRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	UserID       pgtype.UUID        `json:"user_id"`
-	TokenHash    string             `json:"token_hash"`
-	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	Email        string             `json:"email"`
-	DisplayName  string             `json:"display_name"`
-	FirstName    string             `json:"first_name"`
-	LastName     string             `json:"last_name"`
-	State        string             `json:"state"`
-	IsMfaEnabled bool               `json:"is_mfa_enabled"`
-	Attributes   []byte             `json:"attributes"`
+	ID                         pgtype.UUID        `json:"id"`
+	UserID                     pgtype.UUID        `json:"user_id"`
+	TokenHash                  string             `json:"token_hash"`
+	ExpiresAt                  pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
+	Email                      string             `json:"email"`
+	DisplayName                string             `json:"display_name"`
+	FirstName                  string             `json:"first_name"`
+	LastName                   string             `json:"last_name"`
+	State                      string             `json:"state"`
+	IsMfaEnabled               bool               `json:"is_mfa_enabled"`
+	TotpSecretEncrypted        pgtype.Text        `json:"totp_secret_encrypted"`
+	PendingTotpSecretEncrypted pgtype.Text        `json:"pending_totp_secret_encrypted"`
+	PendingTotpExpiresAt       pgtype.Timestamptz `json:"pending_totp_expires_at"`
+	Attributes                 []byte             `json:"attributes"`
 }
 
 func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error) {
@@ -206,29 +276,35 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash string) (
 		&i.LastName,
 		&i.State,
 		&i.IsMfaEnabled,
+		&i.TotpSecretEncrypted,
+		&i.PendingTotpSecretEncrypted,
+		&i.PendingTotpExpiresAt,
 		&i.Attributes,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, display_name, first_name, last_name, password_hash, state, is_mfa_enabled, attributes, created_at, updated_at
+SELECT id, email, display_name, first_name, last_name, password_hash, state, is_mfa_enabled, totp_secret_encrypted, pending_totp_secret_encrypted, pending_totp_expires_at, attributes, created_at, updated_at
 FROM users
 WHERE email = $1
 `
 
 type GetUserByEmailRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Email        string             `json:"email"`
-	DisplayName  string             `json:"display_name"`
-	FirstName    string             `json:"first_name"`
-	LastName     string             `json:"last_name"`
-	PasswordHash string             `json:"password_hash"`
-	State        string             `json:"state"`
-	IsMfaEnabled bool               `json:"is_mfa_enabled"`
-	Attributes   []byte             `json:"attributes"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID                         pgtype.UUID        `json:"id"`
+	Email                      string             `json:"email"`
+	DisplayName                string             `json:"display_name"`
+	FirstName                  string             `json:"first_name"`
+	LastName                   string             `json:"last_name"`
+	PasswordHash               string             `json:"password_hash"`
+	State                      string             `json:"state"`
+	IsMfaEnabled               bool               `json:"is_mfa_enabled"`
+	TotpSecretEncrypted        pgtype.Text        `json:"totp_secret_encrypted"`
+	PendingTotpSecretEncrypted pgtype.Text        `json:"pending_totp_secret_encrypted"`
+	PendingTotpExpiresAt       pgtype.Timestamptz `json:"pending_totp_expires_at"`
+	Attributes                 []byte             `json:"attributes"`
+	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -243,6 +319,9 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.PasswordHash,
 		&i.State,
 		&i.IsMfaEnabled,
+		&i.TotpSecretEncrypted,
+		&i.PendingTotpSecretEncrypted,
+		&i.PendingTotpExpiresAt,
 		&i.Attributes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -349,4 +428,49 @@ func (q *Queries) ListPermissionsByUser(ctx context.Context, userID pgtype.UUID)
 		return nil, err
 	}
 	return items, nil
+}
+
+const setUserPendingTotpSecret = `-- name: SetUserPendingTotpSecret :exec
+UPDATE users
+SET pending_totp_secret_encrypted = $2,
+    pending_totp_expires_at       = $3,
+    updated_at                    = now()
+WHERE id = $1
+`
+
+type SetUserPendingTotpSecretParams struct {
+	ID                         pgtype.UUID        `json:"id"`
+	PendingTotpSecretEncrypted pgtype.Text        `json:"pending_totp_secret_encrypted"`
+	PendingTotpExpiresAt       pgtype.Timestamptz `json:"pending_totp_expires_at"`
+}
+
+// Persist a short-lived pending TOTP enrollment (FR-4): the freshly generated
+// secret is stored ENCRYPTED at rest (NFR-S4) with an expiry. The confirm step
+// validates a code against THIS server-issued secret.
+func (q *Queries) SetUserPendingTotpSecret(ctx context.Context, arg SetUserPendingTotpSecretParams) error {
+	_, err := q.db.Exec(ctx, setUserPendingTotpSecret, arg.ID, arg.PendingTotpSecretEncrypted, arg.PendingTotpExpiresAt)
+	return err
+}
+
+const setUserTotpSecret = `-- name: SetUserTotpSecret :exec
+UPDATE users
+SET totp_secret_encrypted         = $2,
+    is_mfa_enabled                = true,
+    pending_totp_secret_encrypted = NULL,
+    pending_totp_expires_at       = NULL,
+    updated_at                    = now()
+WHERE id = $1
+`
+
+type SetUserTotpSecretParams struct {
+	ID                  pgtype.UUID `json:"id"`
+	TotpSecretEncrypted pgtype.Text `json:"totp_secret_encrypted"`
+}
+
+// Enable TOTP MFA (FR-4): persist the AES-256-GCM encrypted shared secret and
+// flip the is_mfa_enabled flag in one statement, clearing any pending
+// enrollment. The plaintext secret is never stored (NFR-S4).
+func (q *Queries) SetUserTotpSecret(ctx context.Context, arg SetUserTotpSecretParams) error {
+	_, err := q.db.Exec(ctx, setUserTotpSecret, arg.ID, arg.TotpSecretEncrypted)
+	return err
 }

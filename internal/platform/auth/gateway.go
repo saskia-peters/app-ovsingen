@@ -47,19 +47,11 @@ func UserFrom(ctx context.Context) *core.User {
 func RequirePermission(validator SessionValidator, resolver PermissionResolver, required string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := BearerToken(r)
-			if token == "" {
-				httpapi.WriteError(w, http.StatusUnauthorized, "unauthorized", "Authentifizierung erforderlich.")
+			user, ok := authenticate(w, r, validator)
+			if !ok {
 				return
 			}
-
-			sess, err := validator.Validate(r.Context(), token)
-			if err != nil || sess.User == nil {
-				httpapi.WriteError(w, http.StatusUnauthorized, "unauthorized", "Authentifizierung erforderlich.")
-				return
-			}
-
-			perms, err := resolver.ListPermissionsByUser(r.Context(), sess.User.ID)
+			perms, err := resolver.ListPermissionsByUser(r.Context(), user.ID)
 			if err != nil {
 				httpapi.WriteError(w, http.StatusInternalServerError, "internal_error", "Ein interner Fehler ist aufgetreten.")
 				return
@@ -71,9 +63,44 @@ func RequirePermission(validator SessionValidator, resolver PermissionResolver, 
 				return
 			}
 
-			next.ServeHTTP(w, r.WithContext(WithUser(r.Context(), sess.User)))
+			next.ServeHTTP(w, r.WithContext(WithUser(r.Context(), user)))
 		})
 	}
+}
+
+// RequireAuth is an authentication-only gateway middleware (AD-2/AD-6): it
+// validates the bearer token and stores the owning user in the context, but
+// imposes no permission requirement (unlike RequirePermission). It is used for
+// endpoints any authenticated user may call, such as MFA management (FR-4).
+func RequireAuth(validator SessionValidator) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			user, ok := authenticate(w, r, validator)
+			if !ok {
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(WithUser(r.Context(), user)))
+		})
+	}
+}
+
+// authenticate is the single shared token/session resolution for every gateway
+// middleware (review findings 1.6-8 / 1.6-9): it extracts the bearer token,
+// validates it and guards against a nil session (a validator returning a nil
+// session with a nil error must not panic). On any failure it writes the
+// uniform 401 envelope and reports ok=false.
+func authenticate(w http.ResponseWriter, r *http.Request, validator SessionValidator) (*core.User, bool) {
+	token := BearerToken(r)
+	if token == "" {
+		httpapi.WriteError(w, http.StatusUnauthorized, "unauthorized", "Authentifizierung erforderlich.")
+		return nil, false
+	}
+	sess, err := validator.Validate(r.Context(), token)
+	if err != nil || sess == nil || sess.User == nil {
+		httpapi.WriteError(w, http.StatusUnauthorized, "unauthorized", "Authentifizierung erforderlich.")
+		return nil, false
+	}
+	return sess.User, true
 }
 
 // BearerToken extracts the bearer token from the Authorization header. It is

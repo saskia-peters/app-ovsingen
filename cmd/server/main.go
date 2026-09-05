@@ -44,9 +44,21 @@ func main() {
 	userStore := userpostgres.New(pool)
 	userRepo := userpostgres.NewRepository(userStore)
 	hasher := crypto.NewHasher()
+	// TOTP secret encryption at rest (NFR-S4): the 32-byte key from
+	// GEAR_ENCRYPTION_KEY. A missing/invalid key is surfaced as a clear startup
+	// warning (MFA will be unavailable and MFA endpoints answer 503
+	// "MFA ist derzeit nicht verfügbar.") rather than silently disabling MFA
+	// (review finding 1.6-3). A missing key only affects MFA flows, not
+	// ordinary login/register.
+	encKey, keyErr := cfg.EncryptionKeyBytes()
+	if keyErr != nil {
+		log.Warn("GEAR_ENCRYPTION_KEY missing or invalid; MFA operations will be unavailable",
+			"error", keyErr, "hint", "generate a 32-byte key: openssl rand -hex 32")
+	}
+	secretCipher := crypto.NewSecretCipher(encKey)
 	sessionManager := usercore.NewSessionManager(userRepo, cfg.SessionIdle)
-	userService := usercore.NewService(userRepo, hasher, sessionManager)
-	userHandler := userhttp.NewHandler(userService, log)
+	userService := usercore.NewService(userRepo, hasher, sessionManager, secretCipher)
+	userHandler := userhttp.NewHandler(userService, log, sessionManager)
 
 	// The auth gateway resolves sessions and the live permission set (AD-6).
 	const protectedPermission = "admin.recovery.approve"

@@ -119,6 +119,60 @@ func (m *mockRepo) ClearLoginAttempts(_ context.Context, email string) error {
 	return nil
 }
 
+// SetUserTotpSecret stores the encrypted secret and enables MFA on the in-memory
+// user, mirroring the postgres adapter (FR-4/NFR-S4).
+func (m *mockRepo) SetUserTotpSecret(_ context.Context, userID, encryptedSecret string) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.TotpSecretEncrypted = encryptedSecret
+			u.IsMFAEnabled = true
+			u.PendingTotpSecretEncrypted = ""
+			u.PendingTotpExpiresAt = time.Time{}
+			return nil
+		}
+	}
+	return ErrUserAlreadyExists
+}
+
+// ClearUserTotpSecret disables MFA and clears the encrypted secret (FR-4).
+func (m *mockRepo) ClearUserTotpSecret(_ context.Context, userID string) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.TotpSecretEncrypted = ""
+			u.IsMFAEnabled = false
+			u.PendingTotpSecretEncrypted = ""
+			u.PendingTotpExpiresAt = time.Time{}
+			return nil
+		}
+	}
+	return ErrUserAlreadyExists
+}
+
+// SetUserPendingTotpSecret stores the short-lived pending enrollment (encrypted
+// secret + expiry) on the in-memory user.
+func (m *mockRepo) SetUserPendingTotpSecret(_ context.Context, userID, encryptedSecret string, expiresAt time.Time) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.PendingTotpSecretEncrypted = encryptedSecret
+			u.PendingTotpExpiresAt = expiresAt
+			return nil
+		}
+	}
+	return ErrUserAlreadyExists
+}
+
+// ClearUserPendingTotpSecret clears the pending enrollment.
+func (m *mockRepo) ClearUserPendingTotpSecret(_ context.Context, userID string) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.PendingTotpSecretEncrypted = ""
+			u.PendingTotpExpiresAt = time.Time{}
+			return nil
+		}
+	}
+	return ErrUserAlreadyExists
+}
+
 type mockHasher struct {
 	hashCalls   int
 	verifyCalls int
@@ -195,6 +249,53 @@ func (m *mockSessionStore) DeleteSessionByTokenHash(_ context.Context, tokenHash
 	return nil
 }
 
+func (m *mockSessionStore) DeleteSessionsByUser(_ context.Context, userID string) error {
+	for tokenHash, s := range m.sessions {
+		if s.UserID == userID {
+			delete(m.sessions, tokenHash)
+		}
+	}
+	return nil
+}
+
+func (m *mockSessionStore) DeleteSessionsByUserExcept(_ context.Context, userID, exceptTokenHash string) error {
+	for tokenHash, s := range m.sessions {
+		if s.UserID == userID && tokenHash != exceptTokenHash {
+			delete(m.sessions, tokenHash)
+		}
+	}
+	return nil
+}
+
+// mockCipher is a reversible SecretCipher used in tests: it shifts every byte
+// and hex-encodes it so ciphertext never contains the plaintext secret (letting
+// tests assert at-rest encryption) while staying invertible for TOTP checks.
+type mockCipher struct{}
+
+func (mockCipher) Encrypt(plaintext string) (string, error) {
+	out := make([]byte, len(plaintext))
+	for i := 0; i < len(plaintext); i++ {
+		out[i] = plaintext[i] + 1
+	}
+	return fmt.Sprintf("%x", out), nil
+}
+
+func (mockCipher) Decrypt(encoded string) (string, error) {
+	if len(encoded)%2 != 0 {
+		return "", errors.New("bad ciphertext")
+	}
+	out := make([]byte, len(encoded)/2)
+	for i := 0; i < len(out); i++ {
+		hi, lo := encoded[2*i], encoded[2*i+1]
+		var b byte
+		if _, err := fmt.Sscanf(string([]byte{hi, lo}), "%02x", &b); err != nil {
+			return "", errors.New("bad ciphertext")
+		}
+		out[i] = b - 1
+	}
+	return string(out), nil
+}
+
 // newTestService builds a Service with in-memory repo/hasher/session store.
 func newTestService(repo *mockRepo, hasher *mockHasher) (*Service, *mockSessionStore) {
 	store := newMockSessionStore()
@@ -204,7 +305,7 @@ func newTestService(repo *mockRepo, hasher *mockHasher) (*Service, *mockSessionS
 	}
 	store.withUsers(users...)
 	sm := NewSessionManager(store, time.Hour)
-	return NewService(repo, hasher, sm), store
+	return NewService(repo, hasher, sm, mockCipher{}), store
 }
 
 func TestServiceRegisterHappyPath(t *testing.T) {

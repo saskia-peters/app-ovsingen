@@ -219,6 +219,24 @@ func (m *inMemorySessionStore) DeleteSessionByTokenHash(_ context.Context, token
 	return nil
 }
 
+func (m *inMemorySessionStore) DeleteSessionsByUser(_ context.Context, userID string) error {
+	for tokenHash, s := range m.sessions {
+		if s.UserID == userID {
+			delete(m.sessions, tokenHash)
+		}
+	}
+	return nil
+}
+
+func (m *inMemorySessionStore) DeleteSessionsByUserExcept(_ context.Context, userID, exceptTokenHash string) error {
+	for tokenHash, s := range m.sessions {
+		if s.UserID == userID && tokenHash != exceptTokenHash {
+			delete(m.sessions, tokenHash)
+		}
+	}
+	return nil
+}
+
 // TestGatewayExpiredWithRealSessionManager exercises the actual expiry logic
 // (SessionManager.Validate re-checks the stored expires_at) through the
 // gateway, rather than faking it with a mock error.
@@ -270,5 +288,93 @@ func TestGatewayValidWithRealSessionManager(t *testing.T) {
 
 	if rec := doRequest(h, raw); rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 for a fresh session", rec.Code)
+	}
+}
+
+func newAuthOnlyRouter(v SessionValidator) http.Handler {
+	router := chi.NewRouter()
+	router.Use(RequireAuth(v))
+	router.Get("/demo", func(w http.ResponseWriter, r *http.Request) {
+		u := UserFrom(r.Context())
+		if u == nil {
+			httpapi.WriteError(w, http.StatusInternalServerError, "internal_error", "missing user")
+			return
+		}
+		httpapi.WriteJSON(w, http.StatusOK, map[string]string{"email": u.Email})
+	})
+	return router
+}
+
+func TestRequireAuthNoToken(t *testing.T) {
+	h := newAuthOnlyRouter(&mockValidator{})
+	rec := doRequest(h, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+	var env httpapi.ErrorEnvelope
+	_ = json.Unmarshal(rec.Body.Bytes(), &env)
+	if env.Error.Code != "unauthorized" {
+		t.Errorf("code = %q, want unauthorized", env.Error.Code)
+	}
+}
+
+func TestRequireAuthInvalidToken(t *testing.T) {
+	h := newAuthOnlyRouter(&mockValidator{err: core.ErrSessionNotFound})
+	rec := doRequest(h, "garbage")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestRequireAuthAllowsAnyAuthenticatedUser(t *testing.T) {
+	// RequireAuth needs no permission (unlike RequirePermission) — any active
+	// authenticated caller passes and the user is injected into the context.
+	user := activeUser()
+	h := newAuthOnlyRouter(&mockValidator{session: &core.Session{User: user}})
+	rec := doRequest(h, "valid-token")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var wire map[string]string
+	_ = json.Unmarshal(rec.Body.Bytes(), &wire)
+	if wire["email"] != user.Email {
+		t.Errorf("email = %q, want %q", wire["email"], user.Email)
+	}
+}
+
+func TestGatewayNilSessionWithNilErrorDoesNotPanic(t *testing.T) {
+	// Review finding 1.6-9: a validator returning a nil session with a nil error
+	// must be treated as unauthenticated (401), never dereferenced (panic).
+	v := &mockValidator{session: nil}
+	h := newProtectedRouter(v, &mockResolver{perms: []string{protectedCode}})
+
+	rec := doRequest(h, "valid-token")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 for a nil session", rec.Code)
+	}
+	var env httpapi.ErrorEnvelope
+	_ = json.Unmarshal(rec.Body.Bytes(), &env)
+	if env.Error.Code != "unauthorized" {
+		t.Errorf("code = %q, want unauthorized", env.Error.Code)
+	}
+}
+
+func TestRequireAuthNilSessionWithNilErrorDoesNotPanic(t *testing.T) {
+	// The same nil-session guard applies to RequireAuth (dedup shared helper).
+	h := newAuthOnlyRouter(&mockValidator{session: nil})
+	rec := doRequest(h, "valid-token")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 for a nil session", rec.Code)
+	}
+}
+
+func TestGatewayNilUserWithNilErrorDoesNotPanic(t *testing.T) {
+	// A session whose User is nil (without an error) is also unauthenticated.
+	v := &mockValidator{session: &core.Session{}}
+	h := newProtectedRouter(v, &mockResolver{perms: []string{protectedCode}})
+
+	rec := doRequest(h, "valid-token")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 for a session without a user", rec.Code)
 	}
 }

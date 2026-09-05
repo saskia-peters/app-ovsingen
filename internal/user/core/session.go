@@ -31,6 +31,15 @@ type SessionStore interface {
 	CreateSession(ctx context.Context, userID, tokenHash string, expiresAt time.Time) (*Session, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (*Session, error)
 	DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error
+	// DeleteSessionsByUser revokes every session of a user; used when MFA is
+	// disabled so pre-existing sessions must re-authenticate (review finding
+	// 1.6-2).
+	DeleteSessionsByUser(ctx context.Context, userID string) error
+	// DeleteSessionsByUserExcept revokes all of a user's sessions except the
+	// one identified by the given token hash; used when MFA is enabled so
+	// pre-enrollment sessions cannot bypass the second factor (review finding
+	// 1.6-2).
+	DeleteSessionsByUserExcept(ctx context.Context, userID, exceptTokenHash string) error
 }
 
 // SessionManager issues, validates and invalidates opaque session tokens
@@ -111,4 +120,23 @@ func (m *SessionManager) Invalidate(ctx context.Context, rawToken string) error 
 		return nil
 	}
 	return m.store.DeleteSessionByTokenHash(ctx, hashToken(rawToken))
+}
+
+// RevokeOtherSessions invalidates every session of the user except the one
+// identified by rawToken (NFR-S2). An empty rawToken (e.g. the caller is not
+// acting through a specific session) revokes all sessions. Used after enabling
+// MFA so sessions issued before enrollment cannot bypass the second factor
+// (review finding 1.6-2).
+func (m *SessionManager) RevokeOtherSessions(ctx context.Context, userID, rawToken string) error {
+	if rawToken == "" {
+		return m.store.DeleteSessionsByUser(ctx, userID)
+	}
+	return m.store.DeleteSessionsByUserExcept(ctx, userID, hashToken(rawToken))
+}
+
+// RevokeAllSessions invalidates every session of the user (NFR-S2). Used after
+// disabling MFA so all pre-existing sessions must re-authenticate (review
+// finding 1.6-2).
+func (m *SessionManager) RevokeAllSessions(ctx context.Context, userID string) error {
+	return m.store.DeleteSessionsByUser(ctx, userID)
 }

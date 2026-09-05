@@ -37,7 +37,8 @@ func (r *Repository) CreateRegisteredUser(ctx context.Context, email, displayNam
 	}
 
 	return userFromRow(row.ID, row.Email, row.DisplayName, row.FirstName, row.LastName,
-		row.PasswordHash, row.State, row.IsMfaEnabled, row.Attributes, row.CreatedAt, row.UpdatedAt), nil
+		row.PasswordHash, row.State, row.IsMfaEnabled, row.TotpSecretEncrypted,
+		row.PendingTotpSecretEncrypted, row.PendingTotpExpiresAt, row.Attributes, row.CreatedAt, row.UpdatedAt), nil
 }
 
 // GetUserByEmail queries a user by their email address. If not found, returns nil, nil.
@@ -51,7 +52,8 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*core.Us
 	}
 
 	return userFromRow(row.ID, row.Email, row.DisplayName, row.FirstName, row.LastName,
-		row.PasswordHash, row.State, row.IsMfaEnabled, row.Attributes, row.CreatedAt, row.UpdatedAt), nil
+		row.PasswordHash, row.State, row.IsMfaEnabled, row.TotpSecretEncrypted,
+		row.PendingTotpSecretEncrypted, row.PendingTotpExpiresAt, row.Attributes, row.CreatedAt, row.UpdatedAt), nil
 }
 
 // ListPermissionsByUser resolves the user's live permission set (AD-12):
@@ -104,6 +106,19 @@ func (r *Repository) GetSessionByTokenHash(ctx context.Context, tokenHash string
 		_ = json.Unmarshal(row.Attributes, &attrs)
 	}
 
+	secret := ""
+	if row.TotpSecretEncrypted.Valid {
+		secret = row.TotpSecretEncrypted.String
+	}
+	pendingSecret := ""
+	if row.PendingTotpSecretEncrypted.Valid {
+		pendingSecret = row.PendingTotpSecretEncrypted.String
+	}
+	var pendingExpiry time.Time
+	if row.PendingTotpExpiresAt.Valid {
+		pendingExpiry = row.PendingTotpExpiresAt.Time
+	}
+
 	return &core.Session{
 		ID:        uuidToString(row.ID.Bytes),
 		UserID:    uuidToString(row.UserID.Bytes),
@@ -111,14 +126,17 @@ func (r *Repository) GetSessionByTokenHash(ctx context.Context, tokenHash string
 		ExpiresAt: row.ExpiresAt.Time,
 		CreatedAt: row.CreatedAt.Time,
 		User: &core.User{
-			ID:           uuidToString(row.UserID.Bytes),
-			Email:        row.Email,
-			DisplayName:  row.DisplayName,
-			FirstName:    row.FirstName,
-			LastName:     row.LastName,
-			State:        core.UserState(row.State),
-			IsMFAEnabled: row.IsMfaEnabled,
-			Attributes:   attrs,
+			ID:                       uuidToString(row.UserID.Bytes),
+			Email:                    row.Email,
+			DisplayName:              row.DisplayName,
+			FirstName:                row.FirstName,
+			LastName:                 row.LastName,
+			State:                    core.UserState(row.State),
+			IsMFAEnabled:             row.IsMfaEnabled,
+			TotpSecretEncrypted:      secret,
+			PendingTotpSecretEncrypted: pendingSecret,
+			PendingTotpExpiresAt:     pendingExpiry,
+			Attributes:               attrs,
 		},
 	}, nil
 }
@@ -161,6 +179,76 @@ func (r *Repository) ClearLoginAttempts(ctx context.Context, email string) error
 	return r.queries.ClearLoginAttempts(ctx, email)
 }
 
+// SetUserTotpSecret persists the AES-256-GCM encrypted TOTP secret and enables
+// MFA for the user (FR-4/NFR-S4). The plaintext secret is never stored.
+func (r *Repository) SetUserTotpSecret(ctx context.Context, userID, encryptedSecret string) error {
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return err
+	}
+	return r.queries.SetUserTotpSecret(ctx, SetUserTotpSecretParams{
+		ID:                  uid,
+		TotpSecretEncrypted: pgtype.Text{String: encryptedSecret, Valid: true},
+	})
+}
+
+// ClearUserTotpSecret disables MFA and clears the stored encrypted secret
+// (FR-4).
+func (r *Repository) ClearUserTotpSecret(ctx context.Context, userID string) error {
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return err
+	}
+	return r.queries.ClearUserTotpSecret(ctx, uid)
+}
+
+// SetUserPendingTotpSecret persists a short-lived pending TOTP enrollment: the
+// freshly generated secret is stored ENCRYPTED at rest (NFR-S4) with an expiry
+// (FR-4 / review finding 1.6-1).
+func (r *Repository) SetUserPendingTotpSecret(ctx context.Context, userID, encryptedSecret string, expiresAt time.Time) error {
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return err
+	}
+	return r.queries.SetUserPendingTotpSecret(ctx, SetUserPendingTotpSecretParams{
+		ID:                       uid,
+		PendingTotpSecretEncrypted: pgtype.Text{String: encryptedSecret, Valid: true},
+		PendingTotpExpiresAt:     pgtype.Timestamptz{Time: expiresAt, Valid: true},
+	})
+}
+
+// ClearUserPendingTotpSecret clears a pending TOTP enrollment after the confirm
+// step (success or failure).
+func (r *Repository) ClearUserPendingTotpSecret(ctx context.Context, userID string) error {
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return err
+	}
+	return r.queries.ClearUserPendingTotpSecret(ctx, uid)
+}
+
+// DeleteSessionsByUser revokes every session of a user (NFR-S2).
+func (r *Repository) DeleteSessionsByUser(ctx context.Context, userID string) error {
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return err
+	}
+	return r.queries.DeleteSessionsByUser(ctx, uid)
+}
+
+// DeleteSessionsByUserExcept revokes all of a user's sessions except the one
+// identified by the given token hash (NFR-S2 / review finding 1.6-2).
+func (r *Repository) DeleteSessionsByUserExcept(ctx context.Context, userID, exceptTokenHash string) error {
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return err
+	}
+	return r.queries.DeleteSessionsByUserExcept(ctx, DeleteSessionsByUserExceptParams{
+		UserID:     uid,
+		TokenHash: exceptTokenHash,
+	})
+}
+
 func uuidToString(b [16]byte) string {
 	return fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 		b[0], b[1], b[2], b[3],
@@ -172,23 +260,38 @@ func uuidToString(b [16]byte) string {
 }
 
 // userFromRow maps an sqlc user row to the core.User domain entity.
-func userFromRow(id pgtype.UUID, email, displayName, firstName, lastName, passwordHash, state string, isMfa bool, attributes []byte, createdAt, updatedAt pgtype.Timestamptz) *core.User {
+func userFromRow(id pgtype.UUID, email, displayName, firstName, lastName, passwordHash, state string, isMfa bool, totpSecret pgtype.Text, pendingSecret pgtype.Text, pendingExpiry pgtype.Timestamptz, attributes []byte, createdAt, updatedAt pgtype.Timestamptz) *core.User {
 	var attrs map[string]any
 	if len(attributes) > 0 {
 		_ = json.Unmarshal(attributes, &attrs)
 	}
+	secret := ""
+	if totpSecret.Valid {
+		secret = totpSecret.String
+	}
+	pending := ""
+	if pendingSecret.Valid {
+		pending = pendingSecret.String
+	}
+	var expiry time.Time
+	if pendingExpiry.Valid {
+		expiry = pendingExpiry.Time
+	}
 	return &core.User{
-		ID:           uuidToString(id.Bytes),
-		Email:        email,
-		DisplayName:  displayName,
-		FirstName:    firstName,
-		LastName:     lastName,
-		PasswordHash: passwordHash,
-		State:        core.UserState(state),
-		IsMFAEnabled: isMfa,
-		Attributes:   attrs,
-		CreatedAt:    createdAt.Time,
-		UpdatedAt:    updatedAt.Time,
+		ID:                         uuidToString(id.Bytes),
+		Email:                      email,
+		DisplayName:                displayName,
+		FirstName:                  firstName,
+		LastName:                   lastName,
+		PasswordHash:               passwordHash,
+		State:                      core.UserState(state),
+		IsMFAEnabled:               isMfa,
+		TotpSecretEncrypted:        secret,
+		PendingTotpSecretEncrypted: pending,
+		PendingTotpExpiresAt:       expiry,
+		Attributes:                 attrs,
+		CreatedAt:                  createdAt.Time,
+		UpdatedAt:                  updatedAt.Time,
 	}
 }
 

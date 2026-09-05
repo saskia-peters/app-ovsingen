@@ -72,3 +72,59 @@ func TestLoadSessionIdleInvalidWarns(t *testing.T) {
 		t.Errorf("expected a warning for invalid GEAR_SESSION_IDLE, got output %q", buf.String())
 	}
 }
+
+func TestLoadEncryptionKeyHex(t *testing.T) {
+	hexKey := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	cfg := Load(mapEnv(map[string]string{"GEAR_ENCRYPTION_KEY": hexKey}))
+	if cfg.EncryptionKeyErr != nil {
+		t.Fatalf("EncryptionKeyErr = %v, want nil", cfg.EncryptionKeyErr)
+	}
+	key, err := cfg.EncryptionKeyBytes()
+	if err != nil {
+		t.Fatalf("EncryptionKeyBytes failed: %v", err)
+	}
+	if len(key) != 32 {
+		t.Fatalf("key length = %d, want 32", len(key))
+	}
+}
+
+func TestLoadEncryptionKeyBase64(t *testing.T) {
+	b64 := "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+	cfg := Load(mapEnv(map[string]string{"GEAR_ENCRYPTION_KEY": b64}))
+	if cfg.EncryptionKeyErr != nil {
+		t.Fatalf("EncryptionKeyErr = %v, want nil", cfg.EncryptionKeyErr)
+	}
+	key, err := cfg.EncryptionKeyBytes()
+	if err != nil {
+		t.Fatalf("EncryptionKeyBytes failed: %v", err)
+	}
+	if len(key) != 32 {
+		t.Fatalf("key length = %d, want 32", len(key))
+	}
+}
+
+func TestLoadEncryptionKeyMissingIsError(t *testing.T) {
+	cfg := Load(mapEnv(nil))
+	if cfg.EncryptionKeyErr == nil {
+		t.Fatal("expected EncryptionKeyErr for a missing GEAR_ENCRYPTION_KEY")
+	}
+	if _, err := cfg.EncryptionKeyBytes(); err == nil {
+		t.Fatal("expected EncryptionKeyBytes to fail for a missing key")
+	}
+}
+
+func TestLoadEncryptionKeyInvalid(t *testing.T) {
+	cfg := Load(mapEnv(map[string]string{"GEAR_ENCRYPTION_KEY": "not-a-valid-key"}))
+	if cfg.EncryptionKeyErr == nil {
+		t.Fatal("expected EncryptionKeyErr for an invalid key")
+	}
+}
+
+func TestLoadEncryptionKeyWrongLength(t *testing.T) {
+	// 16 bytes encoded as hex — must be rejected (AES-256 requires 32 bytes).
+	shortHex := "00112233445566778899aabbccddeeff"
+	cfg := Load(mapEnv(map[string]string{"GEAR_ENCRYPTION_KEY": shortHex}))
+	if cfg.EncryptionKeyErr == nil {
+		t.Fatal("expected EncryptionKeyErr for a 16-byte key")
+	}
+}

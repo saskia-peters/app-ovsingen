@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Repository defines the outbound persistence contract required by the User core.
@@ -15,6 +16,22 @@ type Repository interface {
 	GetLoginAttempts(ctx context.Context, email string) (*LoginAttempts, error)
 	IncrementLoginAttempts(ctx context.Context, email string) error
 	ClearLoginAttempts(ctx context.Context, email string) error
+	// TOTP MFA persistence (FR-4): the shared secret is stored encrypted at
+	// rest (NFR-S4) and cleared on disable. The pending enrollment holds a
+	// short-lived encrypted copy of the server-issued secret so the confirm
+	// step validates the code against it (review finding 1.6-1).
+	SetUserTotpSecret(ctx context.Context, userID, encryptedSecret string) error
+	ClearUserTotpSecret(ctx context.Context, userID string) error
+	SetUserPendingTotpSecret(ctx context.Context, userID, encryptedSecret string, expiresAt time.Time) error
+	ClearUserPendingTotpSecret(ctx context.Context, userID string) error
+}
+
+// SecretCipher encrypts/decrypts the TOTP shared secret at rest (NFR-S4). The
+// concrete implementation is an outbound adapter (AES-256-GCM with the
+// GEAR_ENCRYPTION_KEY) so the domain never touches key material directly.
+type SecretCipher interface {
+	Encrypt(plaintext string) (string, error)
+	Decrypt(encoded string) (string, error)
 }
 
 // PasswordHasher defines the password hashing contract.
@@ -34,14 +51,16 @@ type Service struct {
 	repo     Repository
 	hasher   PasswordHasher
 	sessions *SessionManager
+	cipher   SecretCipher
 }
 
 // NewService constructs a User domain Service.
-func NewService(repo Repository, hasher PasswordHasher, sessions *SessionManager) *Service {
+func NewService(repo Repository, hasher PasswordHasher, sessions *SessionManager, cipher SecretCipher) *Service {
 	return &Service{
 		repo:     repo,
 		hasher:   hasher,
 		sessions: sessions,
+		cipher:   cipher,
 	}
 }
 

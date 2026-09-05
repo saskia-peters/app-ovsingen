@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -278,5 +280,195 @@ func TestPostgresSessionAndPermissionRepository(t *testing.T) {
 	}
 	if _, err := repo.GetSessionByTokenHash(ctx, "hash-of-raw-token"); err != core.ErrSessionNotFound {
 		t.Errorf("deleted token error = %v, want core.ErrSessionNotFound", err)
+	}
+}
+
+func TestPostgresTotpRepository(t *testing.T) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://gear:gear@localhost:5432/gear?sslmode=disable"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		t.Skipf("skipping db integration test: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.Ping(ctx); err != nil {
+		t.Skipf("skipping db integration test (db ping failed): %v", err)
+	}
+
+	queries := New(pool)
+	repo := NewRepository(queries)
+
+	testEmail := "totp.test." + time.Now().Format("20060102150405.000000") + "@gear.local"
+	created, err := repo.CreateRegisteredUser(ctx, testEmail, "TOTP Test", "TOTP", "Test", "$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHRzYWx0$8U3f5yO8JUpfGT5WmljHhL8n2nWlVEhL2fj7EXpS9gM")
+	if err != nil {
+		t.Fatalf("CreateRegisteredUser failed: %v", err)
+	}
+	if created.IsMFAEnabled {
+		t.Fatal("fresh user must have MFA disabled")
+	}
+	if created.TotpSecretEncrypted != "" {
+		t.Fatal("fresh user must have no stored TOTP secret")
+	}
+
+	// 1. SetUserTotpSecret persists the encrypted secret and flips the flag.
+	ciphertext := "base64(nonce||ciphertext)=" + testEmail
+	if err := repo.SetUserTotpSecret(ctx, created.ID, ciphertext); err != nil {
+		t.Fatalf("SetUserTotpSecret failed: %v", err)
+	}
+	fetched, err := repo.GetUserByEmail(ctx, testEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail failed: %v", err)
+	}
+	if !fetched.IsMFAEnabled {
+		t.Error("MFA flag must be true after SetUserTotpSecret")
+	}
+	if fetched.TotpSecretEncrypted != ciphertext {
+		t.Errorf("stored secret = %q, want %q", fetched.TotpSecretEncrypted, ciphertext)
+	}
+
+	// 1b. A session created for the MFA-enabled user must carry the encrypted
+	// secret on its user snapshot so MFA disable can validate a current code
+	// (FR-4). This pins the JOIN in GetSessionByTokenHash.
+	sess, err := repo.CreateSession(ctx, created.ID, "hash-of-totp-session", time.Now().UTC().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+	sessFetched, err := repo.GetSessionByTokenHash(ctx, "hash-of-totp-session")
+	if err != nil {
+		t.Fatalf("GetSessionByTokenHash failed: %v", err)
+	}
+	if sessFetched.User == nil || sessFetched.User.TotpSecretEncrypted != ciphertext {
+		t.Errorf("session user secret = %q, want %q", sessFetched.User.TotpSecretEncrypted, ciphertext)
+	}
+	if sessFetched.User == nil || !sessFetched.User.IsMFAEnabled {
+		t.Errorf("session user MFA flag = %v, want true", sessFetched.User.IsMFAEnabled)
+	}
+	_ = sess
+
+	// 2. ClearUserTotpSecret disables MFA and clears the secret.
+	if err := repo.ClearUserTotpSecret(ctx, created.ID); err != nil {
+		t.Fatalf("ClearUserTotpSecret failed: %v", err)
+	}
+	fetched, err = repo.GetUserByEmail(ctx, testEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail failed: %v", err)
+	}
+	if fetched.IsMFAEnabled {
+		t.Error("MFA flag must be false after ClearUserTotpSecret")
+	}
+	if fetched.TotpSecretEncrypted != "" {
+		t.Error("encrypted secret must be cleared after disable")
+	}
+
+	// 3. SetUserPendingTotpSecret persists a short-lived pending enrollment
+	// (encrypted secret + expiry) that the confirm step validates against.
+	pendingCipher := "base64(pending-nonce||ciphertext)=" + testEmail
+	pendingExpiry := time.Now().UTC().Add(10 * time.Minute)
+	if err := repo.SetUserPendingTotpSecret(ctx, created.ID, pendingCipher, pendingExpiry); err != nil {
+		t.Fatalf("SetUserPendingTotpSecret failed: %v", err)
+	}
+	fetched, err = repo.GetUserByEmail(ctx, testEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail failed: %v", err)
+	}
+	if fetched.PendingTotpSecretEncrypted != pendingCipher {
+		t.Errorf("pending secret = %q, want %q", fetched.PendingTotpSecretEncrypted, pendingCipher)
+	}
+	if fetched.PendingTotpExpiresAt.IsZero() {
+		t.Error("pending expiry must be persisted")
+	}
+
+	// 3b. The session user snapshot carries the pending enrollment so the
+	// confirm step can act on it without an extra lookup.
+	sess2, err := repo.CreateSession(ctx, created.ID, "hash-of-pending-session", time.Now().UTC().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+	sessFetched2, err := repo.GetSessionByTokenHash(ctx, "hash-of-pending-session")
+	if err != nil {
+		t.Fatalf("GetSessionByTokenHash failed: %v", err)
+	}
+	if sessFetched2.User == nil || sessFetched2.User.PendingTotpSecretEncrypted != pendingCipher {
+		t.Errorf("session user pending secret = %q, want %q", sessFetched2.User.PendingTotpSecretEncrypted, pendingCipher)
+	}
+	_ = sess2
+
+	// 4. ClearUserPendingTotpSecret clears the pending enrollment.
+	if err := repo.ClearUserPendingTotpSecret(ctx, created.ID); err != nil {
+		t.Fatalf("ClearUserPendingTotpSecret failed: %v", err)
+	}
+	fetched, err = repo.GetUserByEmail(ctx, testEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail failed: %v", err)
+	}
+	if fetched.PendingTotpSecretEncrypted != "" || !fetched.PendingTotpExpiresAt.IsZero() {
+		t.Error("pending enrollment must be cleared")
+	}
+}
+
+func TestPostgresSessionRevocationRepository(t *testing.T) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://gear:gear@localhost:5432/gear?sslmode=disable"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		t.Skipf("skipping db integration test: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.Ping(ctx); err != nil {
+		t.Skipf("skipping db integration test (db ping failed): %v", err)
+	}
+
+	queries := New(pool)
+	repo := NewRepository(queries)
+
+	testEmail := "revoke.test." + time.Now().Format("20060102150405.000000") + "@gear.local"
+	created, err := repo.CreateRegisteredUser(ctx, testEmail, "Revoke Test", "Revoke", "Test", "$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHRzYWx0$8U3f5yO8JUpfGT5WmljHhL8n2nWlVEhL2fj7EXpS9gM")
+	if err != nil {
+		t.Fatalf("CreateRegisteredUser failed: %v", err)
+	}
+
+	// Create three sessions.
+	expiry := time.Now().UTC().Add(time.Hour)
+	for i := 1; i <= 3; i++ {
+		hash := fmt.Sprintf("hash-revoke-%d", i)
+		if _, err := repo.CreateSession(ctx, created.ID, hash, expiry); err != nil {
+			t.Fatalf("CreateSession(%s) failed: %v", hash, err)
+		}
+	}
+
+	// DeleteSessionsByUserExcept keeps the excepted session.
+	if err := repo.DeleteSessionsByUserExcept(ctx, created.ID, "hash-revoke-2"); err != nil {
+		t.Fatalf("DeleteSessionsByUserExcept failed: %v", err)
+	}
+	if _, err := repo.GetSessionByTokenHash(ctx, "hash-revoke-2"); err != nil {
+		t.Errorf("excepted session must survive, got %v", err)
+	}
+	if _, err := repo.GetSessionByTokenHash(ctx, "hash-revoke-1"); !errors.Is(err, core.ErrSessionNotFound) {
+		t.Errorf("non-excepted session must be revoked, got %v", err)
+	}
+	if _, err := repo.GetSessionByTokenHash(ctx, "hash-revoke-3"); !errors.Is(err, core.ErrSessionNotFound) {
+		t.Errorf("non-excepted session must be revoked, got %v", err)
+	}
+
+	// DeleteSessionsByUser revokes everything left.
+	if err := repo.DeleteSessionsByUser(ctx, created.ID); err != nil {
+		t.Fatalf("DeleteSessionsByUser failed: %v", err)
+	}
+	if _, err := repo.GetSessionByTokenHash(ctx, "hash-revoke-2"); !errors.Is(err, core.ErrSessionNotFound) {
+		t.Errorf("all sessions must be revoked, got %v", err)
 	}
 }

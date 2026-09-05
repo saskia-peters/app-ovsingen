@@ -110,6 +110,41 @@ describe('LoginPage', () => {
     })
   })
 
+  it('HAPPY_PATH_MFA: a successful login persists the is_mfa_enabled flag for the SPA indicator', async () => {
+    stubFetch({
+      ok: true,
+      status: 200,
+      body: {
+        token: 'opaque-session-token',
+        user: { id: 'u-1', email: 'erika@example.com', display_name: 'Erika Musterfrau', is_mfa_enabled: true },
+      },
+    })
+
+    await submitLogin('erika@example.com', 'geheim123456')
+
+    await waitFor(() => {
+      expect(localStorage.getItem('gear.is_mfa_enabled')).toBe('true')
+    })
+  })
+
+  it('HAPPY_PATH_NO_MFA: a successful login without MFA clears the flag', async () => {
+    localStorage.setItem('gear.is_mfa_enabled', 'true')
+    stubFetch({
+      ok: true,
+      status: 200,
+      body: {
+        token: 'opaque-session-token',
+        user: { id: 'u-1', email: 'erika@example.com', display_name: 'Erika Musterfrau', is_mfa_enabled: false },
+      },
+    })
+
+    await submitLogin('erika@example.com', 'geheim123456')
+
+    await waitFor(() => {
+      expect(localStorage.getItem('gear.is_mfa_enabled')).toBeNull()
+    })
+  })
+
   it('INVALID_CREDENTIALS: shows anti-enumeration microcopy on 401', async () => {
     stubFetch({
       ok: false,
@@ -248,6 +283,159 @@ describe('LoginPage', () => {
 
     expect(screen.getByText(/Zu viele Fehlversuche/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Bitte warten/ })).toBeDisabled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('MFA_CHALLENGE: a mfa_required response shows the TOTP step and the "MFA aktiv" indicator', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ mfa_required: true }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await submitLogin('erika@example.com', 'geheim123456')
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Code aus der Authenticator-App')).toBeInTheDocument()
+    })
+    // UX-DR6: the login UI shows the "MFA aktiv" indicator during the challenge.
+    expect(screen.getByText(/MFA aktiv/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Code prüfen' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Zurück zur E-Mail-/ })).toBeInTheDocument()
+    // No session token is stored yet (two-step login, FR-4).
+    expect(localStorage.getItem(TOKEN_STORAGE_KEY)).toBeNull()
+    // The first POST must NOT carry a totp_code.
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'erika@example.com', password: 'geheim123456' }),
+    })
+  })
+
+  it('MFA_VALID_CODE: submitting a valid code stores the token and navigates to the dashboard', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ mfa_required: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          token: 'opaque-session-token',
+          user: { id: 'u-1', email: 'erika@example.com', is_mfa_enabled: true },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await submitLogin('erika@example.com', 'geheim123456')
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Code aus der Authenticator-App')).toBeInTheDocument()
+    })
+
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Code aus der Authenticator-App'), '123456')
+    await user.click(screen.getByRole('button', { name: 'Code prüfen' }))
+
+    await waitFor(() => {
+      expect(localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('opaque-session-token')
+    })
+    expect(screen.getByText('Übersicht')).toBeInTheDocument()
+
+    const secondCall = fetchMock.mock.calls[1]
+    expect(secondCall[0]).toBe('/api/v1/auth/login')
+    expect(JSON.parse(String(secondCall[1].body))).toEqual({
+      email: 'erika@example.com',
+      password: 'geheim123456',
+      totp_code: '123456',
+    })
+  })
+
+  it('MFA_INVALID_CODE: a 401 on the challenge step shows the same anti-enumeration microcopy', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ mfa_required: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({
+          error: { code: 'invalid_credentials', message: 'E-Mail oder Passwort ist falsch.' },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await submitLogin('erika@example.com', 'geheim123456')
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Code aus der Authenticator-App')).toBeInTheDocument()
+    })
+
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Code aus der Authenticator-App'), '000000')
+    await user.click(screen.getByRole('button', { name: 'Code prüfen' }))
+
+    await waitFor(() => {
+      // UX-DR7: the rejection does not reveal why — identical microcopy.
+      expect(screen.getByText('E-Mail oder Passwort ist falsch.')).toBeInTheDocument()
+    })
+    expect(localStorage.getItem(TOKEN_STORAGE_KEY)).toBeNull()
+  })
+
+  it('MFA_INVALID_FORMAT: a non-6-digit code is rejected client-side without hitting the server', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ mfa_required: true }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await submitLogin('erika@example.com', 'geheim123456')
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Code aus der Authenticator-App')).toBeInTheDocument()
+    })
+
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Code aus der Authenticator-App'), '12ab')
+    await user.click(screen.getByRole('button', { name: 'Code prüfen' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Bitte gib den 6-stelligen Code/i)).toBeInTheDocument()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('MFA_BACK: the back link returns to the credentials step', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ mfa_required: true }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await submitLogin('erika@example.com', 'geheim123456')
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Code aus der Authenticator-App')).toBeInTheDocument()
+    })
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /Zurück zur E-Mail-/ }))
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('E-Mail-Adresse')).toBeInTheDocument()
+    })
+    expect(screen.queryByLabelText('Code aus der Authenticator-App')).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

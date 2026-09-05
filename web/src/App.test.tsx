@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import App, { AppRoutes } from './App.tsx'
 import { ThemeProvider } from './context/ThemeContext.tsx'
@@ -147,5 +147,41 @@ describe('App & Dashboard Foundation', () => {
     await user.click(backLink)
 
     expect(screen.getByRole('heading', { level: 2, name: 'Übersicht' })).toBeInTheDocument()
+  })
+
+  it('MFA_ROUTE: renders the MFA settings page at /mfa for an authenticated user', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ enabled: false }),
+      }),
+    )
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/mfa']}>
+          <AppRoutes />
+        </MemoryRouter>
+      </ThemeProvider>,
+    )
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Zwei-Faktor-Authentifizierung' }),
+    ).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('MFA_ROUTE_PROTECTED: redirects to /login without a session token', () => {
+    localStorage.removeItem(TOKEN_STORAGE_KEY)
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/mfa']}>
+          <AppRoutes />
+        </MemoryRouter>
+      </ThemeProvider>,
+    )
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Anmeldung' })).toBeInTheDocument()
   })
 })

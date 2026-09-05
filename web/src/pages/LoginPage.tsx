@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header.tsx'
+import { saveAuthState } from '../auth/authState.ts'
 import styles from './LoginPage.module.css'
 
-const TOKEN_STORAGE_KEY = 'gear.session_token'
 const LOCKOUT_STORAGE_KEY = 'gear.login_lockout_until'
 
 interface LoginErrors {
   email?: string
   password?: string
+  totpCode?: string
   general?: string
 }
 
@@ -34,9 +35,15 @@ function readPersistedLockout(): { lockout: LockoutState | null; countdown: numb
   }
 }
 
+// TotpStep describes the two-step MFA phase (FR-4): after a valid password the
+// server signals mfa_required and the client submits a 6-digit code next.
+type TotpStep = 'none' | 'pending' | 'verifying'
+
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [totpCode, setTotpCode] = useState('')
+  const [totpStep, setTotpStep] = useState<TotpStep>('none')
   const [errors, setErrors] = useState<LoginErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [lockout, setLockout] = useState<LockoutState | null>(() => readPersistedLockout().lockout)
@@ -80,6 +87,16 @@ export function LoginPage() {
     const nextErrors: LoginErrors = {}
     let isValid = true
 
+    if (totpStep !== 'none') {
+      const trimmedCode = totpCode.trim()
+      if (!/^\d{6}$/.test(trimmedCode)) {
+        nextErrors.totpCode = 'Bitte gib den 6-stelligen Code aus deiner Authenticator-App ein.'
+        isValid = false
+      }
+      setErrors(nextErrors)
+      return isValid
+    }
+
     const trimmedEmail = email.trim()
     if (!trimmedEmail) {
       nextErrors.email = 'Bitte gib deine E-Mail-Adresse ein.'
@@ -113,21 +130,37 @@ export function LoginPage() {
     setErrors({})
 
     try {
+      const payload =
+        totpStep !== 'none'
+          ? {
+              email: email.trim(),
+              password,
+              totp_code: totpCode.trim(),
+            }
+          : {
+              email: email.trim(),
+              password,
+            }
+
       const response = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email: email.trim(),
-          password,
-        }),
+        body: JSON.stringify(payload),
       })
 
       const data = await response.json().catch(() => null)
 
+      if (response.ok && data?.mfa_required) {
+        // Two-step login (FR-4): valid password, MFA enabled — prompt for the
+        // 6-digit TOTP code. No session token is issued yet.
+        setTotpStep('pending')
+        return
+      }
+
       if (response.ok && data?.token) {
-        localStorage.setItem(TOKEN_STORAGE_KEY, data.token)
+        saveAuthState(data.token, Boolean(data.user?.is_mfa_enabled))
         navigate('/')
         return
       }
@@ -151,7 +184,7 @@ export function LoginPage() {
       if (response.status === 401) {
         // Anti-enumeration: identical microcopy for any invalid credentials
         // (UX-DR7) — the server never distinguishes wrong password, unknown
-        // email or a non-active account.
+        // email, a non-active account or an invalid TOTP code.
         setErrors({
           general: 'E-Mail oder Passwort ist falsch.',
         })
@@ -170,6 +203,16 @@ export function LoginPage() {
       setIsSubmitting(false)
     }
   }
+
+  // Back to the credentials step (FR-4): re-enter the password before trying
+  // another TOTP code.
+  const backToCredentials = () => {
+    setTotpStep('none')
+    setTotpCode('')
+    setErrors({})
+  }
+
+  const mfaActive = totpStep !== 'none'
 
   return (
     <div className={styles.page}>
@@ -193,61 +236,110 @@ export function LoginPage() {
             </div>
           )}
 
-          <form className={styles.form} onSubmit={handleSubmit} noValidate>
-            <div className={styles.fieldGroup}>
-              <label htmlFor="email" className={styles.label}>
-                E-Mail-Adresse
-              </label>
-              <input
-                id="email"
-                type="email"
-                className={`${styles.input} ${errors.email ? styles.inputError : ''}`}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                aria-invalid={!!errors.email}
-                aria-describedby={errors.email ? 'email-error' : undefined}
-                disabled={isSubmitting}
-                autoComplete="email"
-                required
-              />
-              {errors.email && (
-                <p id="email-error" className={styles.errorText} role="alert">
-                  {errors.email}
-                </p>
-              )}
+          {mfaActive && (
+            <div className={styles.mfaActive} role="status" aria-live="polite">
+              <span className={styles.mfaActiveDot} aria-hidden="true" />
+              MFA aktiv — Zwei-Faktor-Authentifizierung erforderlich
             </div>
+          )}
 
-            <div className={styles.fieldGroup}>
-              <label htmlFor="password" className={styles.label}>
-                Passwort
-              </label>
-              <input
-                id="password"
-                type="password"
-                className={`${styles.input} ${errors.password ? styles.inputError : ''}`}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                aria-invalid={!!errors.password}
-                aria-describedby={errors.password ? 'password-error' : undefined}
-                disabled={isSubmitting}
-                autoComplete="current-password"
-                required
-              />
-              {errors.password && (
-                <p id="password-error" className={styles.errorText} role="alert">
-                  {errors.password}
-                </p>
-              )}
-            </div>
+          <form className={styles.form} onSubmit={handleSubmit} noValidate>
+            {mfaActive ? (
+              <div className={styles.fieldGroup}>
+                <label htmlFor="totpCode" className={styles.label}>
+                  Code aus der Authenticator-App
+                </label>
+                <input
+                  id="totpCode"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  className={`${styles.input} ${styles.totpInput} ${errors.totpCode ? styles.inputError : ''}`}
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value)}
+                  aria-invalid={!!errors.totpCode}
+                  aria-describedby={errors.totpCode ? 'totpCode-error' : undefined}
+                  disabled={isSubmitting}
+                  placeholder="123456"
+                  maxLength={6}
+                  required
+                />
+                {errors.totpCode && (
+                  <p id="totpCode-error" className={styles.errorText} role="alert">
+                    {errors.totpCode}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className={styles.fieldGroup}>
+                  <label htmlFor="email" className={styles.label}>
+                    E-Mail-Adresse
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    className={`${styles.input} ${errors.email ? styles.inputError : ''}`}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    aria-invalid={!!errors.email}
+                    aria-describedby={errors.email ? 'email-error' : undefined}
+                    disabled={isSubmitting}
+                    autoComplete="email"
+                    required
+                  />
+                  {errors.email && (
+                    <p id="email-error" className={styles.errorText} role="alert">
+                      {errors.email}
+                    </p>
+                  )}
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label htmlFor="password" className={styles.label}>
+                    Passwort
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    className={`${styles.input} ${errors.password ? styles.inputError : ''}`}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    aria-invalid={!!errors.password}
+                    aria-describedby={errors.password ? 'password-error' : undefined}
+                    disabled={isSubmitting}
+                    autoComplete="current-password"
+                    required
+                  />
+                  {errors.password && (
+                    <p id="password-error" className={styles.errorText} role="alert">
+                      {errors.password}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
 
             <button
               type="submit"
               className={styles.submitButton}
               disabled={isSubmitting || lockout !== null}
             >
-              {isSubmitting ? 'Wird gesendet...' : lockout !== null ? 'Bitte warten...' : 'Anmelden'}
+              {isSubmitting
+                ? 'Wird gesendet...'
+                : lockout !== null
+                  ? 'Bitte warten...'
+                  : mfaActive
+                    ? 'Code prüfen'
+                    : 'Anmelden'}
             </button>
           </form>
+
+          {mfaActive && (
+            <button type="button" className={styles.backButton} onClick={backToCredentials}>
+              Zurück zur E-Mail-/Passwort-Eingabe
+            </button>
+          )}
 
           <div className={styles.links}>
             <Link to="/register" className={styles.link}>

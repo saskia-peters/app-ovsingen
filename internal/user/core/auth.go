@@ -35,17 +35,25 @@ const dummyPasswordHash = "$argon2id$v=19$m=65536,t=3,p=4$ZNrl3L8243LA/xK0x1A/qA
 type LoginInput struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	// TotpCode is the optional 6-digit TOTP code (FR-4). It is omitted for the
+	// first step of a two-step login when MFA is enabled.
+	TotpCode string `json:"totp_code,omitempty"`
 }
 
 // Validate enforces the input bounds BEFORE the expensive Argon2id verify so
 // an oversized payload cannot be used for a cheap CPU DoS. Only upper bounds
 // are checked; empty values flow through to the uniform 401 anti-enumeration
-// path and never leak account existence.
+// path and never leak account existence. A non-empty TotpCode must be exactly
+// 6 digits (review finding 1.6-7) — enforced server-side, consistent with the
+// client.
 func (in *LoginInput) Validate() error {
 	if utf8.RuneCountInString(in.Email) > 254 {
 		return ErrInvalidLoginInput
 	}
 	if utf8.RuneCountInString(in.Password) > 1024 {
+		return ErrInvalidLoginInput
+	}
+	if in.TotpCode != "" && !isValidTotpCodeFormat(in.TotpCode) {
 		return ErrInvalidLoginInput
 	}
 	return nil
@@ -55,22 +63,29 @@ func (in *LoginInput) Validate() error {
 // resolved permission set is deliberately NOT included: permissions are always
 // re-derived server-side per request (AD-2/AD-6) and must never be client-trusted.
 type LoginUser struct {
-	ID          string `json:"id"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
-	FirstName   string `json:"first_name"`
-	LastName    string `json:"last_name"`
+	ID           string `json:"id"`
+	Email        string `json:"email"`
+	DisplayName  string `json:"display_name"`
+	FirstName    string `json:"first_name"`
+	LastName     string `json:"last_name"`
+	IsMFAEnabled bool   `json:"is_mfa_enabled"`
 }
 
 // LoginResult is the payload returned on successful login: an opaque session
-// token plus the caller's user snapshot.
+// token plus the caller's user snapshot. When MFA is enabled and the client
+// has not yet submitted a TOTP code, MFARequired is true and NO token is
+// issued (two-step login, FR-4).
 type LoginResult struct {
-	Token string    `json:"token"`
-	User  LoginUser `json:"user"`
+	Token       string    `json:"token,omitempty"`
+	MFARequired bool      `json:"mfa_required,omitempty"`
+	User        LoginUser `json:"user,omitempty"`
 }
 
 // Login authenticates a user with email + password, enforces the active
-// account state and issues an opaque session token (AD-2/AD-6).
+// account state and issues an opaque session token (AD-2/AD-6). When MFA is
+// enabled (FR-4) the login is two-step: a valid password returns an MFA
+// challenge (MFARequired, no token); only a subsequent login with a valid
+// current TOTP code issues the session.
 //
 // Progressive lockout (FR-3): failures are tracked per normalized email —
 // including unknown emails — so a blocked email is rejected with ErrLockedOut
@@ -139,6 +154,31 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResult, er
 		return nil, fmt.Errorf("user core: failed to clear login attempts: %w", err)
 	}
 
+	// Two-step MFA (FR-4): when MFA is enabled, a valid password alone must NOT
+	// issue a session. The client first receives an MFA challenge (no token);
+	// it then re-submits the credentials plus a current 6-digit TOTP code which
+	// is validated against the stored (decrypted) secret before a session is
+	// issued. A wrong/expired code is rejected with the identical 401 so the
+	// challenge failure reveals nothing (UX-DR7); TOTP failures do not touch
+	// the progressive password lockout (FR-3) since the password was valid.
+	if user.IsMFAEnabled {
+		if user.TotpSecretEncrypted == "" {
+			// Defense-in-depth: an account flagged MFA without a stored secret
+			// must never authenticate — fail closed.
+			return nil, ErrInvalidCredentials
+		}
+		if input.TotpCode == "" {
+			return &LoginResult{MFARequired: true}, nil
+		}
+		secret, err := s.decryptSecret(user.TotpSecretEncrypted)
+		if err != nil {
+			return nil, fmt.Errorf("user core: failed to decrypt TOTP secret: %w", err)
+		}
+		if !validTotpCode(secret, input.TotpCode) {
+			return nil, ErrInvalidCredentials
+		}
+	}
+
 	// Resolve the permission set before creating the session: a failure here
 	// must not leave an orphaned session behind.
 	if _, err := s.repo.ListPermissionsByUser(ctx, user.ID); err != nil {
@@ -153,11 +193,12 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResult, er
 	return &LoginResult{
 		Token: token,
 		User: LoginUser{
-			ID:          user.ID,
-			Email:       user.Email,
-			DisplayName: user.DisplayName,
-			FirstName:   user.FirstName,
-			LastName:    user.LastName,
+			ID:           user.ID,
+			Email:        user.Email,
+			DisplayName:  user.DisplayName,
+			FirstName:    user.FirstName,
+			LastName:     user.LastName,
+			IsMFAEnabled: user.IsMFAEnabled,
 		},
 	}, nil
 }
