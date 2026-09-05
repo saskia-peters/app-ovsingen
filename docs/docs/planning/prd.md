@@ -370,6 +370,7 @@ Administrators manage a **named schedule catalog** directly in the admin interfa
 
 ### 6.2 Out of Scope for MVP
 * Future ecosystem modules (vehicle logs, event scheduling, operational reporting, etc.) — deferred to V2+.
+* Human verification (CAPTCHA) on registration and login — **future enhancement.** The register and login flows will add a "confirm I am a human" check (e.g. Cloudflare Turnstile, reCAPTCHA, or hCaptcha) to slow automated abuse. Deferred to V2+; provider and server-side key handling to be decided then.
 * External API integrations — deferred to V2+. `[NOTE FOR PM]` If Helferportal integration becomes a strategic priority, this could move forward.
 * Automated email/push notifications — deferred to V2+. *(The transactional account-recovery email for FR-26 is in scope and separate from automated notifications.)*
 * Tool reservations, repair tracking — explicitly out of scope (see §5).

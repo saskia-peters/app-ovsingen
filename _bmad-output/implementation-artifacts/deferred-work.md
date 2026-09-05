@@ -44,3 +44,7 @@ Triage output of review loops — real, non-story-blocking findings that are not
 - Admin bootstrap credentials: the two seeded admin accounts have no `password_hash` (predates Story 1.3's migration), so they cannot log in until a future story seeds/bootstrap their passwords. The admin gateway path is covered by integration tests that seed a hash manually; real bootstrap is a later story.
 - Redirect away from `/login` when authenticated: a user with a valid token visiting `/login` still sees the login form. Minor UX gap; add an "already authenticated → redirect to dashboard" guard when a shared auth context/state is introduced (Story 1.11 auth-ux foundation).
 - `sessions.user_id ON DELETE CASCADE`: deleting a user silently destroys all their sessions, which may be undesirable for audit if session history should be retained. Acceptable while sessions are transient; revisit if session/audit retention becomes a requirement.
+
+## Deferred from: user decision (2026-09-05)
+
+- Human verification (CAPTCHA) on register + login — **future enhancement (V2+).** The register and login flows should add a "confirm I am a human" check (e.g. Cloudflare Turnstile, Google reCAPTCHA, or hCaptcha) to slow automated abuse. Recorded in the PRD §6.2 as out of scope for V1. Provider and server-side secret-key handling to be decided when it is scheduled; it was explicitly deferred rather than implemented in Story 1.5 (progressive login lockout).
