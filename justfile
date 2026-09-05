@@ -112,6 +112,6 @@ sqlc-generate:
 
 # Local-dev only: set/reset a user's password hash (e.g. unlock a seeded admin).
 # Prompts for email + password. NOT for production — real admin credentials are
-# provisioned out-of-band (AD-13 / FR-27).
+# provisioned out-of-band (AD-13 / FR-27). Never run against production data.
 set-admin-password: db-up
-    go run ./cmd/devadmin
+    go run -tags dev ./cmd/devadmin

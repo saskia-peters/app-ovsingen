@@ -1,3 +1,5 @@
+//go:build dev
+
 // Command devadmin is a local development utility to set a user's password
 // hash directly in the database (e.g. to unlock the seeded admin accounts for
 // local testing). It is NOT a production tool — real admin credentials are
