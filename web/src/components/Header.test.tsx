@@ -61,4 +61,24 @@ describe('Header', () => {
     )
     expect(screen.queryByText('MFA aktiv')).not.toBeInTheDocument()
   })
+
+  it('USER_LOGGED_IN: shows the logged-in user name in the header', () => {
+    localStorage.setItem('gear.display_name', 'Erika Musterfrau')
+    render(
+      <ThemeProvider>
+        <Header />
+      </ThemeProvider>,
+    )
+    expect(screen.getByText('Erika Musterfrau')).toBeInTheDocument()
+  })
+
+  it('USER_LOGGED_OUT: hides the user name when not authenticated', () => {
+    localStorage.clear()
+    render(
+      <ThemeProvider>
+        <Header />
+      </ThemeProvider>,
+    )
+    expect(screen.queryByText('Erika Musterfrau')).not.toBeInTheDocument()
+  })
 })

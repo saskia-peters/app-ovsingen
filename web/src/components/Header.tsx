@@ -1,5 +1,5 @@
 import { useTheme } from '../context/useTheme.ts'
-import { isMfaEnabled } from '../auth/authState.ts'
+import { isMfaEnabled, getDisplayName } from '../auth/authState.ts'
 import styles from './Header.module.css'
 
 export function Header() {
@@ -8,6 +8,7 @@ export function Header() {
   const isDark = resolvedTheme === 'dark'
   const toggleLabel = isDark ? 'Hellmodus aktivieren' : 'Dunkelmodus aktivieren'
   const mfaActive = isMfaEnabled()
+  const displayName = getDisplayName()
 
   return (
     <header className={styles.header}>
@@ -21,16 +22,23 @@ export function Header() {
             </span>
           )}
         </div>
-        <button
-          type="button"
-          className={styles.themeToggle}
-          onClick={toggleTheme}
-          aria-label={toggleLabel}
-          title={toggleLabel}
-        >
-          <span aria-hidden="true">{isDark ? '☀️' : '🌙'}</span>
-          <span>{isDark ? 'Hell' : 'Dunkel'}</span>
-        </button>
+        <div className={styles.actions}>
+          {displayName && (
+            <span className={styles.userName} title={displayName}>
+              {displayName}
+            </span>
+          )}
+          <button
+            type="button"
+            className={styles.themeToggle}
+            onClick={toggleTheme}
+            aria-label={toggleLabel}
+            title={toggleLabel}
+          >
+            <span aria-hidden="true">{isDark ? '☀️' : '🌙'}</span>
+            <span>{isDark ? 'Hell' : 'Dunkel'}</span>
+          </button>
+        </div>
       </div>
     </header>
   )

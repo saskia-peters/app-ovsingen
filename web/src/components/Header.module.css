@@ -43,6 +43,23 @@
   white-space: nowrap;
 }
 
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gear-space-3);
+}
+
+.userName {
+  font-size: var(--gear-font-label-size);
+  font-weight: var(--gear-font-label-weight);
+  line-height: var(--gear-font-label-line-height);
+  color: inherit;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .themeToggle {
   display: inline-flex;
   align-items: center;

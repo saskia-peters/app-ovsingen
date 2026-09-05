@@ -5,6 +5,9 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Bind all interfaces so devices on the local network can load the SPA
+    // during `just dev` (e.g. a phone on the same /24 subnet).
+    host: true,
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

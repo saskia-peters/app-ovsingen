@@ -160,7 +160,9 @@ export function LoginPage() {
       }
 
       if (response.ok && data?.token) {
-        saveAuthState(data.token, Boolean(data.user?.is_mfa_enabled))
+        saveAuthState(data.token, Boolean(data.user?.is_mfa_enabled), {
+          displayName: data.user?.display_name,
+        })
         navigate('/')
         return
       }
