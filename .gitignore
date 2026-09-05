@@ -7,6 +7,10 @@ skills/reports/
 # --- Go ---
 bin/
 *.test
+# Bare Go build outputs (e.g. `go build ./cmd/...`)
+/devadmin
+/server
+/cmd/server/server
 
 # --- Node / Vite SPA (web/) ---
 web/node_modules/
