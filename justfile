@@ -109,3 +109,9 @@ lint: vet
 # Regenerate per-module stores from migrations/ via pinned sqlc (config: sqlc.yaml)
 sqlc-generate:
     go run github.com/sqlc-dev/sqlc/cmd/sqlc@{{SQLC_VERSION}} generate
+
+# Local-dev only: set/reset a user's password hash (e.g. unlock a seeded admin).
+# Prompts for email + password. NOT for production — real admin credentials are
+# provisioned out-of-band (AD-13 / FR-27).
+set-admin-password: db-up
+    go run ./cmd/devadmin
