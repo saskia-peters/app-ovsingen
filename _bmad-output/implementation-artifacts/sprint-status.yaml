@@ -1,0 +1,92 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 09-04-2026 19:40
+last_updated: 09-05-2026
+project: gear
+project_key: NOKEY
+tracking_system: file-system
+story_location: 
+  /home/saskia/devprojects/gear/_bmad-output/implementation-artifacts
+development_status:
+  epic-1: in-progress
+  1-1-project-scaffold-database-foundation: review
+  1-2-dashboard-foundation-app-home: backlog
+  1-3-self-registration-with-admin-pending-approval: backlog
+  1-4-email-password-authentication: backlog
+  1-5-progressive-login-lockout: backlog
+  1-6-optional-totp-multi-factor-authentication: backlog
+  1-7-change-own-password: backlog
+  1-8-self-service-password-reset-forgot-password: backlog
+  1-9-flexible-user-attributes: backlog
+  1-10-dual-admin-credential-recovery: backlog
+  1-11-auth-ux-foundation: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-admin-module-access-isolation: backlog
+  2-2-resolution-of-active-permission-set: backlog
+  2-3-admin-ux-foundation: backlog
+  2-4-user-approval-workflow: backlog
+  2-5-role-permission-group-management: backlog
+  2-6-user-group-administration: backlog
+  2-7-qualification-management: backlog
+  2-8-admin-one-time-password-otp-issuance: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-smtp-configuration-admin-settings-email: backlog
+  3-2-backup-destination-configuration-admin-settings-backup: backlog
+  3-3-dsgvo-data-access-report: backlog
+  3-4-dsgvo-account-deletion: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-schedule-catalog-management: backlog
+  4-2-tool-type-management: backlog
+  4-3-tool-management: backlog
+  4-4-flexible-attributes-on-tools-tool-types: backlog
+  4-5-bulk-csv-import: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-qualification-gated-inspection-start: backlog
+  5-2-inspection-ux-foundation: backlog
+  5-3-out-of-service-flagging: backlog
+  5-4-pass-fail-inspection-execution: backlog
+  5-5-checklist-inspection-execution: backlog
+  5-6-out-of-service-reinstatement: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-color-coded-status-dashboard: backlog
+  6-2-status-report-export-pdf: backlog
+  6-3-inspection-history-per-tool: backlog
+  epic-6-retrospective: optional

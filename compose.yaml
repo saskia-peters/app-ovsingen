@@ -1,0 +1,27 @@
+# G.E.A.R. local development stack (podman-compose / docker-compose).
+# Single Compose source shared by both runtimes; driven from the justfile.
+
+services:
+  db:
+    image: docker.io/library/postgres:18
+    container_name: gear-db
+    environment:
+      # Local-development DB credentials only — never the app's seeded admin
+      # credentials (those are provisioned out-of-band, FR-27/AD-13).
+      POSTGRES_USER: gear
+      POSTGRES_PASSWORD: gear
+      POSTGRES_DB: gear
+    ports:
+      - "5432:5432"
+    volumes:
+      # PG 18+ image convention: mount at /var/lib/postgresql so the data
+      # lives in a major-version subdirectory (pg_upgrade-friendly).
+      - gear_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gear -d gear"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  gear_pgdata:

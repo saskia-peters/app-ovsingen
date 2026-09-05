@@ -3,3 +3,17 @@
 skills/reports/
 
 # BMad personal overrides (gitignored by design, see _bmad/custom/.gitignore)
+
+# --- Go ---
+bin/
+*.test
+
+# --- Node / Vite SPA (web/) ---
+web/node_modules/
+web/dist/
+
+# --- local environment overrides ---
+# .env.example is the documented config surface and must stay tracked.
+.env
+.env.*
+!.env.example

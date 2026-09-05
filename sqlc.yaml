@@ -1,0 +1,18 @@
+# sqlc configuration (v2) — wires the one golang-migrate schema (AD-11) to
+# per-module store generation. Each module's repository adapter is generated
+# from the forward migration files, so the generated Go always matches the
+# shipped schema. Add modules here as their tables and queries land.
+version: "2"
+sql:
+  - engine: "postgresql"
+    # Only the forward migrations: they are the single schema authority.
+    # Glob so future forward migrations are picked up automatically.
+    schema:
+      - "./migrations/*.up.sql"
+    queries: "./internal/user/adapters/postgres/queries.sql"
+    gen:
+      go:
+        package: "postgres"
+        out: "./internal/user/adapters/postgres"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
