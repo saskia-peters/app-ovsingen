@@ -115,3 +115,31 @@ sqlc-generate:
 # provisioned out-of-band (AD-13 / FR-27). Never run against production data.
 set-admin-password: db-up
     go run -tags dev ./cmd/devadmin
+
+# WSL2 (Option A): print the current WSL IP and the admin-PowerShell commands to
+# expose `just dev` to devices on the same LAN via a Windows port proxy. The WSL
+# NAT IP is NOT reachable from the LAN directly, so Windows must forward
+# 5173 (Vite) and 8080 (API) to it. Run the printed commands in an elevated
+# PowerShell on Windows, then open http://<windows-lan-ip>:5173 from a phone.
+wsl-portproxy-setup:
+    @wsl_ip=$(hostname -I | awk '{print $1}'); \
+    echo "WSL IP: $wsl_ip"; \
+    echo ""; \
+    echo "Run these in an ADMIN PowerShell on Windows (replace <LAN_IP> with your"; \
+    echo "Windows LAN IP from 'ipconfig', e.g. 192.168.1.20):"; \
+    echo ""; \
+    echo "  netsh interface portproxy add v4tov4 listenport=5173 listenaddress=0.0.0.0 connectport=5173 connectaddress=$wsl_ip"; \
+    echo "  netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=8080 connectaddress=$wsl_ip"; \
+    echo '  netsh advfirewall firewall add rule name="GEAR dev 5173" dir=in action=allow protocol=TCP localport=5173'; \
+    echo '  netsh advfirewall firewall add rule name="GEAR dev 8080" dir=in action=allow protocol=TCP localport=8080'; \
+    echo ""; \
+    echo "Then open http://<LAN_IP>:5173 from your phone."
+
+# WSL2 (Option A): print the commands to remove the Windows port proxy + firewall
+# rules created by wsl-portproxy-setup. Run them in an ADMIN PowerShell.
+wsl-portproxy-teardown:
+    @echo 'Run these in an ADMIN PowerShell on Windows:'; \
+    echo '  netsh interface portproxy delete v4tov4 listenport=5173 listenaddress=0.0.0.0'; \
+    echo '  netsh interface portproxy delete v4tov4 listenport=8080 listenaddress=0.0.0.0'; \
+    echo '  netsh advfirewall firewall delete rule name="GEAR dev 5173"'; \
+    echo '  netsh advfirewall firewall delete rule name="GEAR dev 8080"'
