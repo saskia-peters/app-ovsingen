@@ -11,6 +11,111 @@ import (
 	"github.com/saskia-peters/gear/internal/user/core"
 )
 
+func TestPostgresLoginAttemptsRepository(t *testing.T) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://gear:gear@localhost:5432/gear?sslmode=disable"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		t.Skipf("skipping db integration test: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.Ping(ctx); err != nil {
+		t.Skipf("skipping db integration test (db ping failed): %v", err)
+	}
+
+	queries := New(pool)
+	repo := NewRepository(queries)
+
+	// login_attempts is keyed by email with no users FK, so an unknown email
+	// can be tracked too (anti-enumeration).
+	testEmail := "lockout.test." + time.Now().Format("20060102150405.000000") + "@gear.local"
+
+	// 1. A fresh email has no attempts record.
+	att, err := repo.GetLoginAttempts(ctx, testEmail)
+	if err != nil {
+		t.Fatalf("GetLoginAttempts(fresh) failed: %v", err)
+	}
+	if att != nil {
+		t.Fatalf("expected nil attempts for fresh email, got %+v", att)
+	}
+
+	// 2. Three atomic increments cross the 30s threshold (FR-3).
+	for i := 0; i < 3; i++ {
+		if err := repo.IncrementLoginAttempts(ctx, testEmail); err != nil {
+			t.Fatalf("IncrementLoginAttempts (%d) failed: %v", i, err)
+		}
+	}
+	att, err = repo.GetLoginAttempts(ctx, testEmail)
+	if err != nil {
+		t.Fatalf("GetLoginAttempts failed: %v", err)
+	}
+	if att.Email != testEmail {
+		t.Errorf("attempt email = %q, want %q", att.Email, testEmail)
+	}
+	if att.FailedCount != 3 {
+		t.Errorf("attempt failed count = %d, want 3", att.FailedCount)
+	}
+	want := time.Now().UTC().Add(30 * time.Second)
+	if att.LockoutUntil.IsZero() || att.LockoutUntil.Before(want.Add(-2*time.Second)) || att.LockoutUntil.After(want.Add(2*time.Second)) {
+		t.Errorf("attempt lockout_until = %v, want ~now+30s", att.LockoutUntil)
+	}
+
+	// 3. A 4th increment escalates to the 60s window (LOCKOUT_4_PLUS).
+	if err := repo.IncrementLoginAttempts(ctx, testEmail); err != nil {
+		t.Fatalf("IncrementLoginAttempts (4th) failed: %v", err)
+	}
+	att, err = repo.GetLoginAttempts(ctx, testEmail)
+	if err != nil {
+		t.Fatalf("GetLoginAttempts failed: %v", err)
+	}
+	if att.FailedCount != 4 {
+		t.Errorf("attempt failed count = %d, want 4", att.FailedCount)
+	}
+	want = time.Now().UTC().Add(60 * time.Second)
+	if att.LockoutUntil.IsZero() || att.LockoutUntil.Before(want.Add(-2*time.Second)) || att.LockoutUntil.After(want.Add(2*time.Second)) {
+		t.Errorf("attempt lockout_until = %v, want ~now+60s", att.LockoutUntil)
+	}
+
+	// 4. The counter is capped (LockoutMaxFailedCount = 10).
+	for i := 0; i < 10; i++ {
+		if err := repo.IncrementLoginAttempts(ctx, testEmail); err != nil {
+			t.Fatalf("IncrementLoginAttempts (cap) failed: %v", err)
+		}
+	}
+	att, err = repo.GetLoginAttempts(ctx, testEmail)
+	if err != nil {
+		t.Fatalf("GetLoginAttempts failed: %v", err)
+	}
+	if att.FailedCount != 10 {
+		t.Errorf("attempt failed count = %d, want capped at 10", att.FailedCount)
+	}
+
+	// 5. ClearLoginAttempts resets the counter and window for a fresh cycle.
+	if err := repo.ClearLoginAttempts(ctx, testEmail); err != nil {
+		t.Fatalf("ClearLoginAttempts failed: %v", err)
+	}
+	att, err = repo.GetLoginAttempts(ctx, testEmail)
+	if err != nil {
+		t.Fatalf("GetLoginAttempts after clear failed: %v", err)
+	}
+	if att == nil {
+		t.Fatal("expected attempts row to remain after clear (reset to 0)")
+	}
+	if att.FailedCount != 0 {
+		t.Errorf("attempt failed count = %d, want 0", att.FailedCount)
+	}
+	if !att.LockoutUntil.IsZero() {
+		t.Errorf("attempt lockout_until = %v, want zero after clear", att.LockoutUntil)
+	}
+}
+
 func TestPostgresRepository(t *testing.T) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {

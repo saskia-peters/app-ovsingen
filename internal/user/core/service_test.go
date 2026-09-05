@@ -15,10 +15,18 @@ type mockRepo struct {
 	createErr   error
 	permsErr    error
 	perms       map[string][]string
+	attempts    map[string]*LoginAttempts
+	attemptsErr error
+	upsertCalls int
+	clearCalls  int
 }
 
 func newMockRepo() *mockRepo {
-	return &mockRepo{users: make(map[string]*User), perms: make(map[string][]string)}
+	return &mockRepo{
+		users:    make(map[string]*User),
+		perms:    make(map[string][]string),
+		attempts: make(map[string]*LoginAttempts),
+	}
 }
 
 func (m *mockRepo) CreateRegisteredUser(_ context.Context, email, displayName, firstName, lastName, passwordHash string) (*User, error) {
@@ -52,6 +60,63 @@ func (m *mockRepo) ListPermissionsByUser(_ context.Context, userID string) ([]st
 		return nil, m.permsErr
 	}
 	return m.perms[userID], nil
+}
+
+func (m *mockRepo) GetLoginAttempts(_ context.Context, email string) (*LoginAttempts, error) {
+	if m.attemptsErr != nil {
+		return nil, m.attemptsErr
+	}
+	return m.attempts[email], nil
+}
+
+// IncrementLoginAttempts mirrors the postgres adapter's atomic upsert: it
+// increments the per-email counter (capped), sets the lockout window when a
+// threshold is crossed, and keeps any previously set window until the new count
+// moves into a higher tier.
+func (m *mockRepo) IncrementLoginAttempts(_ context.Context, email string) error {
+	if m.attempts == nil {
+		m.attempts = make(map[string]*LoginAttempts)
+	}
+	cur := 0
+	if a := m.attempts[email]; a != nil {
+		cur = a.FailedCount
+	}
+	newCount := cur + 1
+	if newCount > LockoutMaxFailedCount {
+		newCount = LockoutMaxFailedCount
+	}
+	now := time.Now().UTC()
+	var lockoutUntil time.Time
+	switch {
+	case newCount >= LockoutThresholdLong:
+		lockoutUntil = now.Add(LockoutDurationLong)
+	case newCount == LockoutThresholdShort:
+		lockoutUntil = now.Add(LockoutDurationShort)
+	}
+	m.attempts[email] = &LoginAttempts{
+		Email:        email,
+		FailedCount:  newCount,
+		LockoutUntil: lockoutUntil,
+		UpdatedAt:    now,
+	}
+	m.upsertCalls++
+	return nil
+}
+
+// ClearLoginAttempts resets the email's counter to zero and clears the window,
+// keeping the row — mirroring the real repository (UPDATE ... SET
+// failed_count = 0).
+func (m *mockRepo) ClearLoginAttempts(_ context.Context, email string) error {
+	if m.attempts == nil {
+		m.attempts = make(map[string]*LoginAttempts)
+	}
+	m.attempts[email] = &LoginAttempts{
+		Email:       email,
+		FailedCount: 0,
+		UpdatedAt:   time.Now().UTC(),
+	}
+	m.clearCalls++
+	return nil
 }
 
 type mockHasher struct {

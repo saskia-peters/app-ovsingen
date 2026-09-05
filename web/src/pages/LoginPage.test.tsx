@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
@@ -6,6 +6,7 @@ import { LoginPage } from './LoginPage.tsx'
 import { ThemeProvider } from '../context/ThemeContext.tsx'
 
 const TOKEN_STORAGE_KEY = 'gear.session_token'
+const LOCKOUT_STORAGE_KEY = 'gear.login_lockout_until'
 
 function renderLoginPage() {
   return render(
@@ -49,6 +50,7 @@ describe('LoginPage', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -152,5 +154,100 @@ describe('LoginPage', () => {
         screen.getByText('Verbindung zum Server fehlgeschlagen. Bitte prüfe deine Internetverbindung.'),
       ).toBeInTheDocument()
     })
+  })
+
+  it('LOCKOUT_3_FAILS: shows the German lockout screen and disables the retry button on 429', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: { get: (name: string) => (name === 'Retry-After' ? '30' : null) },
+      json: async () => ({
+        error: {
+          code: 'too_many_attempts',
+          message: 'Zu viele Fehlversuche. Bitte warte 30 Sekunden.',
+        },
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await submitLogin('erika@example.com', 'geheim123456')
+
+    await waitFor(() => {
+      expect(screen.getByText('Zu viele Fehlversuche. Bitte warte 30 Sekunden.')).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: /Bitte warten/ })).toBeDisabled()
+    expect(localStorage.getItem(TOKEN_STORAGE_KEY)).toBeNull()
+    expect(localStorage.getItem(LOCKOUT_STORAGE_KEY)).not.toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('LOCKOUT_EXPIRED: re-enables the retry button once the countdown expires', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: { get: (name: string) => (name === 'Retry-After' ? '30' : null) },
+      json: async () => ({ error: { code: 'too_many_attempts' } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderLoginPage()
+    fireEvent.change(screen.getByLabelText('E-Mail-Adresse'), { target: { value: 'erika@example.com' } })
+    fireEvent.change(screen.getByLabelText('Passwort'), { target: { value: 'geheim123456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Anmelden' }))
+    await act(async () => {})
+
+    expect(screen.getByText(/Zu viele Fehlversuche/)).toBeInTheDocument()
+    expect(screen.getByText(/bitte warte 30 Sekunden/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Bitte warten/ })).toBeDisabled()
+
+    act(() => {
+      vi.advanceTimersByTime(31_000)
+    })
+
+    expect(screen.queryByText(/Zu viele Fehlversuche/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Anmelden' })).toBeEnabled()
+    expect(localStorage.getItem(LOCKOUT_STORAGE_KEY)).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('LOCKOUT_PERSIST: rehydrates an active lockout from localStorage after reload', () => {
+    localStorage.setItem(LOCKOUT_STORAGE_KEY, String(Date.now() + 30_000))
+    renderLoginPage()
+
+    expect(screen.getByText(/Zu viele Fehlversuche\. Bitte warte \d+ Sekunden\./)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Bitte warten/ })).toBeDisabled()
+  })
+
+  it('LOCKOUT_SUBMIT_GUARD: an Enter submit during the countdown does not clear the lockout', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: { get: (name: string) => (name === 'Retry-After' ? '30' : null) },
+      json: async () => ({ error: { code: 'too_many_attempts' } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderLoginPage()
+    fireEvent.change(screen.getByLabelText('E-Mail-Adresse'), { target: { value: 'erika@example.com' } })
+    fireEvent.change(screen.getByLabelText('Passwort'), { target: { value: 'geheim123456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Anmelden' }))
+    await act(async () => {})
+
+    expect(screen.getByRole('button', { name: /Bitte warten/ })).toBeDisabled()
+
+    // A second submit attempt (e.g. implicit Enter submit) while locked must
+    // neither clear nor restart the lockout and must not hit the server.
+    const form = screen.getByLabelText('E-Mail-Adresse').closest('form')
+    if (!form) {
+      throw new Error('login form not found')
+    }
+    fireEvent.submit(form)
+    await act(async () => {})
+
+    expect(screen.getByText(/Zu viele Fehlversuche/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Bitte warten/ })).toBeDisabled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

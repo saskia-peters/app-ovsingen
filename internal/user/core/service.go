@@ -12,6 +12,9 @@ type Repository interface {
 	CreateRegisteredUser(ctx context.Context, email, displayName, firstName, lastName, passwordHash string) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	ListPermissionsByUser(ctx context.Context, userID string) ([]string, error)
+	GetLoginAttempts(ctx context.Context, email string) (*LoginAttempts, error)
+	IncrementLoginAttempts(ctx context.Context, email string) error
+	ClearLoginAttempts(ctx context.Context, email string) error
 }
 
 // PasswordHasher defines the password hashing contract.

@@ -4,8 +4,10 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -80,6 +82,31 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	res, err := h.service.Login(r.Context(), input)
 	if err != nil {
 		switch {
+		case errors.Is(err, core.ErrLockedOut):
+			// Progressive lockout (FR-3): the email is temporarily blocked. The
+			// message stays generic (never reveal why), Retry-After lets the
+			// client count down, and the trigger is emitted to structured
+			// logging (NFR-O1). A bare ErrLockedOut without a *LockoutError
+			// falls back to a sane 30s window.
+			retryAfter, ok := core.LockoutRetryAfter(err)
+			seconds := core.LockoutDefaultRetrySeconds
+			if ok && retryAfter > 0 {
+				seconds = int(retryAfter.Seconds())
+				if seconds < 1 {
+					seconds = 1
+				}
+			} else {
+				h.logger.Warn("login lockout triggered without retry details", "error", err)
+			}
+			var lockoutErr *core.LockoutError
+			email := ""
+			if errors.As(err, &lockoutErr) {
+				email = lockoutErr.Email
+			}
+			h.logger.Warn("login lockout triggered", "email", email, "retry_after", seconds)
+			w.Header().Set("Retry-After", strconv.Itoa(seconds))
+			httpapi.WriteError(w, http.StatusTooManyRequests, "too_many_attempts",
+				fmt.Sprintf("Zu viele Fehlversuche. Bitte warte %d Sekunden.", seconds))
 		case errors.Is(err, core.ErrInvalidCredentials):
 			// Anti-enumeration: identical response for every failure (UX-DR7).
 			httpapi.WriteError(w, http.StatusUnauthorized, "invalid_credentials", "E-Mail oder Passwort ist falsch.")

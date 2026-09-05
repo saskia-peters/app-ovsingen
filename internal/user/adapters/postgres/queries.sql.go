@@ -11,6 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearLoginAttempts = `-- name: ClearLoginAttempts :exec
+UPDATE login_attempts
+SET failed_count = 0, lockout_until = NULL, updated_at = now()
+WHERE email = $1
+`
+
+func (q *Queries) ClearLoginAttempts(ctx context.Context, email string) error {
+	_, err := q.db.Exec(ctx, clearLoginAttempts, email)
+	return err
+}
+
 const createRegisteredUser = `-- name: CreateRegisteredUser :one
 INSERT INTO users (
     email,
@@ -112,6 +123,24 @@ WHERE token_hash = $1
 func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error {
 	_, err := q.db.Exec(ctx, deleteSessionByTokenHash, tokenHash)
 	return err
+}
+
+const getLoginAttempts = `-- name: GetLoginAttempts :one
+SELECT email, failed_count, lockout_until, updated_at
+FROM login_attempts
+WHERE email = $1
+`
+
+func (q *Queries) GetLoginAttempts(ctx context.Context, email string) (LoginAttempt, error) {
+	row := q.db.QueryRow(ctx, getLoginAttempts, email)
+	var i LoginAttempt
+	err := row.Scan(
+		&i.Email,
+		&i.FailedCount,
+		&i.LockoutUntil,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getPermissionByCode = `-- name: GetPermissionByCode :one
@@ -219,6 +248,29 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const incrementLoginAttempts = `-- name: IncrementLoginAttempts :exec
+INSERT INTO login_attempts (email, failed_count, lockout_until)
+VALUES ($1, 1, NULL)
+ON CONFLICT (email) DO UPDATE SET
+    failed_count  = LEAST(login_attempts.failed_count + 1, 10),
+    lockout_until = CASE
+        WHEN login_attempts.failed_count + 1 >= 4 THEN now() + interval '60 seconds'
+        WHEN login_attempts.failed_count + 1 = 3 THEN now() + interval '30 seconds'
+        ELSE NULL
+    END,
+    updated_at    = now()
+`
+
+// Atomic record of a failed login (FR-3): increments the per-email failure
+// counter and sets the progressive lockout window when a threshold is crossed,
+// in a single statement so concurrent attempts for the same email cannot lose
+// updates. The counter is capped (LockoutMaxFailedCount = 10). Thresholds and
+// durations mirror core.LockoutThreshold*/LockoutDuration*.
+func (q *Queries) IncrementLoginAttempts(ctx context.Context, email string) error {
+	_, err := q.db.Exec(ctx, incrementLoginAttempts, email)
+	return err
 }
 
 const listPermissionGroupsByUser = `-- name: ListPermissionGroupsByUser :many

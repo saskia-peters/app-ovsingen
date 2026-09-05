@@ -8,6 +8,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type LoginAttempt struct {
+	Email        string             `json:"email"`
+	FailedCount  int32              `json:"failed_count"`
+	LockoutUntil pgtype.Timestamptz `json:"lockout_until"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Permission struct {
 	ID          pgtype.UUID        `json:"id"`
 	Code        string             `json:"code"`

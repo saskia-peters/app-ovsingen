@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -71,6 +72,13 @@ type LoginResult struct {
 // Login authenticates a user with email + password, enforces the active
 // account state and issues an opaque session token (AD-2/AD-6).
 //
+// Progressive lockout (FR-3): failures are tracked per normalized email —
+// including unknown emails — so a blocked email is rejected with ErrLockedOut
+// BEFORE the password verify, regardless of whether the presented password is
+// correct or the account even exists. Because every probed email accumulates
+// failures and can hit 429, a 429 is not discriminating (anti-enumeration).
+// Outside lockout, all failures remain identical 401s (UX-DR7).
+//
 // Timing normalization (UX-DR7): exactly one password verify always runs,
 // against the account's real hash for active users and against a fixed-cost
 // dummy hash for every other combination, so unknown-email, non-active and
@@ -85,10 +93,22 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResult, er
 	}
 
 	email := strings.ToLower(strings.TrimSpace(input.Email))
+	now := time.Now().UTC()
 
 	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, fmt.Errorf("user core: failed to look up user: %w", err)
+	}
+
+	// Lockout gate runs before the Argon2id verify (FR-3). Keyed on the
+	// normalized email, so an email with enough accumulated failures is blocked
+	// no matter what password (or whether the account) is presented.
+	attempts, err := s.repo.GetLoginAttempts(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("user core: failed to read login attempts: %w", err)
+	}
+	if retryAfter, locked := Check(attempts, now); locked {
+		return nil, NewLockoutError(retryAfter, email)
 	}
 
 	// Single canonical verify: the account's real hash when the account can
@@ -103,18 +123,20 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResult, er
 	}
 
 	ok, err := s.hasher.Verify(input.Password, targetHash)
-	if err != nil || !ok {
+	if err != nil || !ok || !canAuthenticate {
 		// Wrong password for any account state (or a non-existent account)
-		// maps to the same error (UX-DR7).
+		// maps to the same error (UX-DR7). Every failure — including unknown
+		// emails — is recorded against the normalized email so the counter and
+		// lockout apply identically to every probed email (anti-enumeration).
+		if err := s.repo.IncrementLoginAttempts(ctx, email); err != nil {
+			return nil, fmt.Errorf("user core: failed to record login failure: %w", err)
+		}
 		return nil, ErrInvalidCredentials
 	}
 
-	// The verify only passes against the account's real hash when
-	// canAuthenticate; any other combination (unknown email, pending/
-	// deactivated, or account without a stored hash) is rejected with the
-	// identical error so account existence never leaks (FR-5/FR-21).
-	if !canAuthenticate {
-		return nil, ErrInvalidCredentials
+	// Successful login: clear the failure counter for a fresh cycle (FR-3).
+	if err := s.repo.ClearLoginAttempts(ctx, email); err != nil {
+		return nil, fmt.Errorf("user core: failed to clear login attempts: %w", err)
 	}
 
 	// Resolve the permission set before creating the session: a failure here

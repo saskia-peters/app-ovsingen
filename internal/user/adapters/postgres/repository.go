@@ -129,6 +129,38 @@ func (r *Repository) DeleteSessionByTokenHash(ctx context.Context, tokenHash str
 	return r.queries.DeleteSessionByTokenHash(ctx, tokenHash)
 }
 
+// GetLoginAttempts reads the email's login attempt record (FR-3). Returns nil,
+// nil when the email has no tracked attempts yet.
+func (r *Repository) GetLoginAttempts(ctx context.Context, email string) (*core.LoginAttempts, error) {
+	row, err := r.queries.GetLoginAttempts(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &core.LoginAttempts{
+		Email:        row.Email,
+		FailedCount:  int(row.FailedCount),
+		LockoutUntil: row.LockoutUntil.Time,
+		UpdatedAt:    row.UpdatedAt.Time,
+	}, nil
+}
+
+// IncrementLoginAttempts atomically records a failed login for the email: it
+// increments the failure counter and sets the progressive lockout window when a
+// threshold is crossed, in a single statement (FR-3) so concurrent attempts for
+// the same email cannot lose updates.
+func (r *Repository) IncrementLoginAttempts(ctx context.Context, email string) error {
+	return r.queries.IncrementLoginAttempts(ctx, email)
+}
+
+// ClearLoginAttempts resets the email's failure counter and lockout window
+// after a successful login (fresh cycle).
+func (r *Repository) ClearLoginAttempts(ctx context.Context, email string) error {
+	return r.queries.ClearLoginAttempts(ctx, email)
+}
+
 func uuidToString(b [16]byte) string {
 	return fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 		b[0], b[1], b[2], b[3],

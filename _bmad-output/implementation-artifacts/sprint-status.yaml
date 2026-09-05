@@ -40,8 +40,8 @@ development_status:
   1-1-project-scaffold-database-foundation: done
   1-2-dashboard-foundation-app-home: done
   1-3-self-registration-with-admin-pending-approval: done
-  1-4-email-password-authentication: review
-  1-5-progressive-login-lockout: backlog
+  1-4-email-password-authentication: done
+  1-5-progressive-login-lockout: review
   1-6-optional-totp-multi-factor-authentication: backlog
   1-7-change-own-password: backlog
   1-8-self-service-password-reset-forgot-password: backlog

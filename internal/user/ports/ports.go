@@ -26,6 +26,9 @@ type Repository interface {
 	CreateRegisteredUser(ctx context.Context, email, displayName, firstName, lastName, passwordHash string) (*core.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*core.User, error)
 	ListPermissionsByUser(ctx context.Context, userID string) ([]string, error)
+	GetLoginAttempts(ctx context.Context, email string) (*core.LoginAttempts, error)
+	IncrementLoginAttempts(ctx context.Context, email string) error
+	ClearLoginAttempts(ctx context.Context, email string) error
 }
 
 // PasswordHasher is the outbound password hashing port (AD-13).

@@ -111,6 +111,19 @@
   margin: 0;
 }
 
+.lockout {
+  padding: var(--gear-space-4) var(--gear-space-4);
+  background-color: rgba(198, 40, 40, 0.1);
+  border: 1px solid var(--gear-color-status-red);
+  border-radius: var(--gear-radius-md);
+  color: var(--gear-color-status-red);
+  font-size: var(--gear-font-label-size);
+  font-weight: var(--gear-font-label-weight);
+  line-height: var(--gear-font-label-line-height);
+  margin: 0;
+  text-align: center;
+}
+
 .submitButton {
   min-height: 48px;
   display: inline-flex;

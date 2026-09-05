@@ -9,7 +9,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/saskia-peters/gear/internal/platform/httpapi"
 	"github.com/saskia-peters/gear/internal/user/core"
@@ -280,6 +282,96 @@ func TestHandlerLoginInvalidCredentials(t *testing.T) {
 	}
 	if env.Error.Message != "E-Mail oder Passwort ist falsch." {
 		t.Errorf("message = %q, want anti-enumeration microcopy", env.Error.Message)
+	}
+}
+
+func TestHandlerLoginLockedOutReturns429WithRetryAfter(t *testing.T) {
+	tests := []struct {
+		name         string
+		retryAfter   time.Duration
+		wantSeconds  string
+		wantMessage  string
+	}{
+		{name: "30 second lockout", retryAfter: 30 * time.Second, wantSeconds: "30", wantMessage: "Zu viele Fehlversuche. Bitte warte 30 Sekunden."},
+		{name: "60 second lockout", retryAfter: 60 * time.Second, wantSeconds: "60", wantMessage: "Zu viele Fehlversuche. Bitte warte 60 Sekunden."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &mockService{
+				loginFunc: func(ctx context.Context, input core.LoginInput) (*ports.LoginResult, error) {
+					return nil, core.NewLockoutError(tt.retryAfter, "active@example.com")
+				},
+			}
+			h := NewHandler(svc, discardLogger())
+
+			payload := map[string]string{"email": "active@example.com", "password": "geheim123456"}
+			body, _ := json.Marshal(payload)
+
+			req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+			rec := httptest.NewRecorder()
+
+			h.Login(rec, req)
+
+			if rec.Code != http.StatusTooManyRequests {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusTooManyRequests)
+			}
+			if got := rec.Header().Get("Retry-After"); got != tt.wantSeconds {
+				t.Errorf("Retry-After = %q, want %q", got, tt.wantSeconds)
+			}
+
+			var env httpapi.ErrorEnvelope
+			if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+				t.Fatalf("failed to decode error envelope: %v", err)
+			}
+			if env.Error.Code != "too_many_attempts" {
+				t.Errorf("code = %q, want too_many_attempts", env.Error.Code)
+			}
+			if env.Error.Message != tt.wantMessage {
+				t.Errorf("message = %q, want %q", env.Error.Message, tt.wantMessage)
+			}
+			// The Retry-After header value must parse to the advertised seconds.
+			parsed, err := strconv.Atoi(rec.Header().Get("Retry-After"))
+			if err != nil || parsed <= 0 {
+				t.Errorf("Retry-After = %q is not a positive integer", rec.Header().Get("Retry-After"))
+			}
+		})
+	}
+}
+
+func TestHandlerLoginBareLockedOutFallsBackToSaneRetry(t *testing.T) {
+	// A lockout error that is NOT a *LockoutError (bare sentinel) must still
+	// produce a valid 429 with a sane Retry-After default, not seconds=1.
+	svc := &mockService{
+		loginFunc: func(ctx context.Context, input core.LoginInput) (*ports.LoginResult, error) {
+			return nil, core.ErrLockedOut
+		},
+	}
+	h := NewHandler(svc, discardLogger())
+
+	payload := map[string]string{"email": "active@example.com", "password": "geheim123456"}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.Login(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTooManyRequests)
+	}
+	if got := rec.Header().Get("Retry-After"); got != "30" {
+		t.Errorf("Retry-After = %q, want default 30", got)
+	}
+
+	var env httpapi.ErrorEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("failed to decode error envelope: %v", err)
+	}
+	if env.Error.Code != "too_many_attempts" {
+		t.Errorf("code = %q, want too_many_attempts", env.Error.Code)
+	}
+	if env.Error.Message != "Zu viele Fehlversuche. Bitte warte 30 Sekunden." {
+		t.Errorf("message = %q, want 30s fallback microcopy", env.Error.Message)
 	}
 }
 

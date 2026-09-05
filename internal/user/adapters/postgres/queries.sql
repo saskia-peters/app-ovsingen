@@ -57,6 +57,33 @@ WHERE s.token_hash = $1;
 DELETE FROM sessions
 WHERE token_hash = $1;
 
+-- name: GetLoginAttempts :one
+SELECT email, failed_count, lockout_until, updated_at
+FROM login_attempts
+WHERE email = $1;
+
+-- name: IncrementLoginAttempts :exec
+-- Atomic record of a failed login (FR-3): increments the per-email failure
+-- counter and sets the progressive lockout window when a threshold is crossed,
+-- in a single statement so concurrent attempts for the same email cannot lose
+-- updates. The counter is capped (LockoutMaxFailedCount = 10). Thresholds and
+-- durations mirror core.LockoutThreshold*/LockoutDuration*.
+INSERT INTO login_attempts (email, failed_count, lockout_until)
+VALUES ($1, 1, NULL)
+ON CONFLICT (email) DO UPDATE SET
+    failed_count  = LEAST(login_attempts.failed_count + 1, 10),
+    lockout_until = CASE
+        WHEN login_attempts.failed_count + 1 >= 4 THEN now() + interval '60 seconds'
+        WHEN login_attempts.failed_count + 1 = 3 THEN now() + interval '30 seconds'
+        ELSE NULL
+    END,
+    updated_at    = now();
+
+-- name: ClearLoginAttempts :exec
+UPDATE login_attempts
+SET failed_count = 0, lockout_until = NULL, updated_at = now()
+WHERE email = $1;
+
 -- name: ListPermissionsByUser :many
 -- Resolved permission set (AD-12): additive union of permission-group
 -- memberships plus direct grants. Deduplicated via DISTINCT.

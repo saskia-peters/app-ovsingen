@@ -1,9 +1,10 @@
-import { useState, useEffect, type FormEvent } from 'react'
+import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header.tsx'
 import styles from './LoginPage.module.css'
 
 const TOKEN_STORAGE_KEY = 'gear.session_token'
+const LOCKOUT_STORAGE_KEY = 'gear.login_lockout_until'
 
 interface LoginErrors {
   email?: string
@@ -11,11 +12,36 @@ interface LoginErrors {
   general?: string
 }
 
+interface LockoutState {
+  endsAt: number
+}
+
+// readPersistedLockout rehydrates an active lockout from localStorage (an
+// absolute expiry timestamp) so a page reload keeps the retry button disabled
+// until the window truly expires. The server enforces 429 regardless.
+function readPersistedLockout(): { lockout: LockoutState | null; countdown: number } {
+  const raw = localStorage.getItem(LOCKOUT_STORAGE_KEY)
+  if (!raw) {
+    return { lockout: null, countdown: 0 }
+  }
+  const endsAt = Number(raw)
+  if (!Number.isFinite(endsAt) || endsAt <= Date.now()) {
+    return { lockout: null, countdown: 0 }
+  }
+  return {
+    lockout: { endsAt },
+    countdown: Math.ceil((endsAt - Date.now()) / 1000),
+  }
+}
+
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<LoginErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [lockout, setLockout] = useState<LockoutState | null>(() => readPersistedLockout().lockout)
+  const [countdown, setCountdown] = useState(() => readPersistedLockout().countdown)
+  const countdownRef = useRef(countdown)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -25,6 +51,30 @@ export function LoginPage() {
       document.title = prevTitle
     }
   }, [])
+
+  // Progressive lockout countdown (FR-3 / UX-DR6 / UX-DR8): while a lockout is
+  // active the form stays visible but the retry button stays disabled until the
+  // timer expires. State updates happen in the deferred interval callback —
+  // never inside a state updater — so the countdown and lockout clear cleanly.
+  useEffect(() => {
+    if (lockout === null) {
+      return
+    }
+    const interval = setInterval(() => {
+      const next = countdownRef.current - 1
+      if (next <= 0) {
+        clearInterval(interval)
+        localStorage.removeItem(LOCKOUT_STORAGE_KEY)
+        countdownRef.current = 0
+        setCountdown(0)
+        setLockout(null)
+        return
+      }
+      countdownRef.current = next
+      setCountdown(next)
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [lockout])
 
   const validate = (): boolean => {
     const nextErrors: LoginErrors = {}
@@ -50,6 +100,11 @@ export function LoginPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (lockout !== null) {
+      // A lockout countdown is still active (e.g. an implicit Enter submit):
+      // return early so the window is neither cleared nor restarted.
+      return
+    }
     if (!validate()) {
       return
     }
@@ -74,6 +129,22 @@ export function LoginPage() {
       if (response.ok && data?.token) {
         localStorage.setItem(TOKEN_STORAGE_KEY, data.token)
         navigate('/')
+        return
+      }
+
+      if (response.status === 429) {
+        // Progressive lockout (FR-3): show the countdown and disable the retry
+        // button until the server-provided Retry-After window expires
+        // (UX-DR6/UX-DR8). Default to 30s if the header is missing. The expiry
+        // is persisted so a reload keeps the lockout until it truly expires.
+        const raw = response.headers.get('Retry-After')
+        const parsed = raw ? Number(raw) : 30
+        const seconds = Number.isFinite(parsed) && parsed > 0 ? Math.ceil(parsed) : 30
+        const endsAt = Date.now() + seconds * 1000
+        localStorage.setItem(LOCKOUT_STORAGE_KEY, String(endsAt))
+        countdownRef.current = seconds
+        setCountdown(seconds)
+        setLockout({ endsAt })
         return
       }
 
@@ -113,6 +184,12 @@ export function LoginPage() {
           {errors.general && (
             <div className={styles.generalError} role="alert">
               {errors.general}
+            </div>
+          )}
+
+          {lockout && (
+            <div className={styles.lockout} role="alert" aria-live="assertive">
+              Zu viele Fehlversuche. Bitte warte {countdown} Sekunden.
             </div>
           )}
 
@@ -163,8 +240,12 @@ export function LoginPage() {
               )}
             </div>
 
-            <button type="submit" className={styles.submitButton} disabled={isSubmitting}>
-              {isSubmitting ? 'Wird gesendet...' : 'Anmelden'}
+            <button
+              type="submit"
+              className={styles.submitButton}
+              disabled={isSubmitting || lockout !== null}
+            >
+              {isSubmitting ? 'Wird gesendet...' : lockout !== null ? 'Bitte warten...' : 'Anmelden'}
             </button>
           </form>
 
